@@ -1,5 +1,22 @@
+# ==========================================
+# Environment & Secrets (Never commit credentials!)
+# ==========================================
+.env
+.env.*
+!.env.example
+*.env
+
+# ==========================================
+# Node / Frontend (Vite + React)
+# ==========================================
+node_modules/
+dist/
+dist-ssr/
+build/
+*.local
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,18 +24,63 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# ==========================================
+# Python / Backend (FastAPI)
+# ==========================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
 
-# Editor directories and files
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+backend/venv/
+backend/env/
+backend/.venv/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Local databases and SQLite
+*.sqlite
+*.sqlite3
+*.db
+backend/*.db
+backend/*.sqlite3
+
+# Uploaded / Generated evidence files (keep folder with .gitkeep)
+backend/app/storage/evidence/*
+!backend/app/storage/evidence/.gitkeep
+
+# ==========================================
+# Operating System & IDEs
+# ==========================================
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDE & Editor files
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+!.vscode/settings.json
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+*.swp
+*.swo
