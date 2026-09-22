@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useVerification } from '../context/VerificationContext';
-import { complianceApi, readingsApi, fingerprintApi } from '../services/api';
+import { complianceApi, readingsApi } from '../services/api';
 
 interface ResultMetric {
   label: string;
@@ -10,17 +10,16 @@ interface ResultMetric {
 }
 
 const summarySteps = [
-  { step: '1', label: 'Instrument Details', icon: 'precision_manufacturing' },
-  { step: '2', label: 'Data Acquisition', icon: 'sensors' },
-  { step: '3', label: 'Evidence Capture', icon: 'photo_camera' },
-  { step: '4', label: 'OIML R-76 Compliance', icon: 'verified_user' },
-  { step: '5', label: 'Metrological Fingerprint', icon: 'fingerprint' },
-  { step: '6', label: 'Software Verification', icon: 'code_blocks' },
-  { step: '7', label: 'Results Summary', icon: 'fact_check' },
+  { step: '1', label: '1. Instrument', icon: 'precision_manufacturing' },
+  { step: '2', label: '2. Test Session', icon: 'badge' },
+  { step: '3', label: '3. Observations', icon: 'sensors' },
+  { step: '4', label: '4. Compliance', icon: 'verified' },
+  { step: '5', label: '5. Results', icon: 'fact_check' },
+  { step: '6', label: '6. Report', icon: 'description' },
 ];
 
 export const ResultsView: React.FC = () => {
-  const { draftSession, activeBackendSessionId, backendConnected, setCurrentView } = useVerification();
+  const { draftSession, activeBackendSessionId, backendConnected, setCurrentView, proceedToStep } = useVerification();
 
   const [overallVerdict, setOverallVerdict] = useState<string | null>(null);
   const [verdictLoading, setVerdictLoading] = useState(false);
@@ -41,9 +40,6 @@ export const ResultsView: React.FC = () => {
       // 2. Fetch all readings
       const readings = await readingsApi.getSessionReadings(activeBackendSessionId).catch(() => []);
       
-      // 3. Fetch fingerprint
-      const fp = await fingerprintApi.getSessionFingerprint(activeBackendSessionId).catch(() => null);
-
       // Determine verdict from compliance result or readings
       let verdict: string | null = null;
       if (compliance?.overall_result) {
@@ -65,12 +61,11 @@ export const ResultsView: React.FC = () => {
       // Determine step statuses from real data
       const newStatuses: Record<string, string> = {
         '1': draftSession.manufacturer ? 'complete' : 'pending',
-        '2': total > 0 ? 'complete' : 'pending',
-        '3': 'pending', // Evidence status — may add evidence count fetch later
+        '2': draftSession.sessionId ? 'complete' : 'pending',
+        '3': total > 0 ? 'complete' : 'pending',
         '4': compliance ? (verdict === 'PASS' ? 'pass' : verdict === 'FAIL' ? 'fail' : 'complete') : 'pending',
-        '5': fp && fp.status === 'COMPLETE' ? 'complete' : 'pending',
-        '6': draftSession.softwareApplicable ? 'pending' : 'na',
-        '7': 'current',
+        '5': 'current',
+        '6': 'pending',
       };
       setStepStatuses(newStatuses);
 
@@ -96,40 +91,32 @@ export const ResultsView: React.FC = () => {
         }
       }
 
-      if (fp && fp.error_statistics) {
-        const stats = fp.error_statistics as any;
-        if (stats.mean_error !== undefined) {
-          newMetrics.push({
-            label: 'Mean Error (μ)',
-            value: `${Number(stats.mean_error).toFixed(4)} ${draftSession.unit}`,
-            sub: 'Average systematic bias across all test points',
-            color: 'text-on-tertiary-container',
-          });
-        }
-        if (stats.std_dev !== undefined) {
-          newMetrics.push({
-            label: 'Repeatability (σ)',
-            value: `${Number(stats.std_dev).toFixed(6)} ${draftSession.unit}`,
-            sub: 'Standard deviation of measurement errors',
-            color: 'text-on-tertiary-container',
-          });
-        }
-        if (stats.max_absolute_error !== undefined) {
-          newMetrics.push({
-            label: 'Max Absolute Error',
-            value: `${Number(stats.max_absolute_error).toFixed(4)} ${draftSession.unit}`,
-            sub: 'Worst case measurement deviation',
-            color: Number(stats.max_absolute_error) > 0 ? 'text-error' : 'text-on-tertiary-container',
-          });
-        }
-      }
+      if (readings && readings.length > 0) {
+        const errors = readings.map(r => r.error);
+        const meanErr = errors.reduce((acc, v) => acc + v, 0) / errors.length;
+        const maxAbsErr = Math.max(...errors.map(e => Math.abs(e)));
+        const variance = errors.reduce((acc, v) => acc + Math.pow(v - meanErr, 2), 0) / errors.length;
+        const stdDev = Math.sqrt(variance);
 
-      if (fp) {
         newMetrics.push({
-          label: 'Trend Classification',
-          value: fp.trend?.classification || 'N/A',
-          sub: fp.trend?.description || 'Fingerprint trend analysis',
-          color: fp.trend?.classification === 'STABLE' ? 'text-on-tertiary-container' : 'text-on-surface-variant',
+          label: 'Mean Error (μ)',
+          value: `${meanErr >= 0 ? '+' : ''}${meanErr.toFixed(4)} ${draftSession.unit}`,
+          sub: 'Average error of indication across all test points',
+          color: 'text-secondary',
+        });
+
+        newMetrics.push({
+          label: 'Max Absolute Error',
+          value: `${maxAbsErr.toFixed(4)} ${draftSession.unit}`,
+          sub: 'Peak error observed relative to reference mass',
+          color: failed > 0 ? 'text-error' : 'text-on-tertiary-container',
+        });
+
+        newMetrics.push({
+          label: 'Repeatability Dispersion (σ)',
+          value: `${stdDev.toFixed(4)} ${draftSession.unit}`,
+          sub: 'Standard deviation of observation errors',
+          color: 'text-on-surface',
         });
       }
 
@@ -172,8 +159,10 @@ export const ResultsView: React.FC = () => {
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-space-md">
           <div>
             <div className="flex flex-wrap items-center gap-space-xs mb-1">
-              <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary font-label-mono-sm text-label-mono-sm font-semibold uppercase">STEP 7 // VERIFICATION RESULTS</span>
-              <span className="px-2 py-0.5 rounded bg-surface-container-high text-secondary font-label-mono-sm text-label-mono-sm uppercase font-bold">
+              <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary font-label-mono-sm text-[11px] font-bold uppercase tracking-wider">
+                STEP 5 OF 6 // RESULTS SUMMARY
+              </span>
+              <span className="px-2 py-0.5 rounded bg-surface-container text-secondary font-label-mono-sm text-[11px] font-bold uppercase">
                 SESSION: {draftSession.sessionId || 'N/A'}
               </span>
               {activeBackendSessionId && (
@@ -326,30 +315,43 @@ export const ResultsView: React.FC = () => {
 
       {/* Action Footer */}
       <section className="bg-surface-container-lowest p-space-md rounded-xl shadow-card flex flex-col sm:flex-row items-center justify-between gap-space-md">
-        <div className="flex items-center gap-2">
-          <span className={`material-symbols-outlined text-[24px] ${overallVerdict === 'PASS' ? 'text-on-tertiary-container' : overallVerdict === 'FAIL' ? 'text-error' : 'text-outline'}`}>
-            {overallVerdict === 'PASS' ? 'verified' : overallVerdict === 'FAIL' ? 'cancel' : 'pending'}
-          </span>
-          <div>
-            <div className="font-headline-sm text-headline-sm text-primary font-bold">
-              Verification {verdictText}
-            </div>
-            <div className="font-body-sm text-body-sm text-on-surface-variant">
-              {overallVerdict === 'PASS'
-                ? 'Proceed to generate the official Digital Verification Certificate'
-                : overallVerdict === 'FAIL'
-                ? 'Instrument failed OIML R-76 MPE criteria — review test data before proceeding'
-                : 'Complete the verification workflow to obtain a verdict'}
+        <div className="flex items-center gap-space-md">
+          <button
+            onClick={() => setCurrentView('compliance')}
+            className="btn-secondary text-xs h-[42px]"
+          >
+            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+            ← Back to Compliance
+          </button>
+          <div className="flex items-center gap-2">
+            <span className={`material-symbols-outlined text-[24px] ${overallVerdict === 'PASS' ? 'text-on-tertiary-container' : overallVerdict === 'FAIL' ? 'text-error' : 'text-outline'}`}>
+              {overallVerdict === 'PASS' ? 'verified' : overallVerdict === 'FAIL' ? 'cancel' : 'pending'}
+            </span>
+            <div>
+              <div className="font-headline-sm text-body-md text-primary font-bold">
+                Verification Verdict: {verdictText}
+              </div>
+              <div className="font-body-sm text-xs text-on-surface-variant">
+                {overallVerdict === 'PASS'
+                  ? 'Conforms to statutory OIML R-76 MPE criteria. Proceed to official certificate.'
+                  : overallVerdict === 'FAIL'
+                  ? 'Exceeds statutory MPE limits. Rejection or adjustment required.'
+                  : 'Complete observations and evaluate to finalize verdict.'}
+              </div>
             </div>
           </div>
         </div>
+
         <button
-          onClick={() => setCurrentView('reports')}
-          className="btn-primary"
+          onClick={() => {
+            proceedToStep(6);
+            setCurrentView('reports');
+          }}
+          className="btn-primary text-xs h-[42px] px-6 font-semibold"
           disabled={!overallVerdict}
         >
           <span className="material-symbols-outlined text-[16px]">description</span>
-          Generate Digital Certificate
+          Generate Digital Report &amp; Certificate →
         </button>
       </section>
     </>

@@ -28,11 +28,12 @@ export const AppSidebar: React.FC = () => {
     {
       title: 'Phase-1 Core Workflow',
       items: [
-        { key: 'new-test-session', icon: 'precision_manufacturing', label: '1. Setup & Lab', badge: 'STEP 1' },
-        { key: 'data-acquisition', icon: 'sensors', label: '2. Observation / Data', badge: 'STEP 2' },
-        { key: 'compliance', icon: 'verified', label: '3. Compliance Engine', badge: 'STEP 3' },
-        { key: 'results', icon: 'fact_check', label: '4. Results Summary', badge: 'STEP 4' },
-        { key: 'reports', icon: 'description', label: '5. Digital Report', badge: 'STEP 5' },
+        { key: 'instruments', icon: 'scale', label: '1. Instrument', badge: 'STEP 1' },
+        { key: 'test-session', icon: 'badge', label: '2. Test Session', badge: 'STEP 2' },
+        { key: 'observations', icon: 'sensors', label: '3. Observations', badge: 'STEP 3' },
+        { key: 'compliance', icon: 'verified', label: '4. Compliance', badge: 'STEP 4' },
+        { key: 'results', icon: 'fact_check', label: '5. Results', badge: 'STEP 5' },
+        { key: 'reports', icon: 'description', label: '6. Report', badge: 'STEP 6' },
       ],
     },
     {
@@ -44,7 +45,8 @@ export const AppSidebar: React.FC = () => {
   ];
 
   const getActiveKey = (): NavigationKey => {
-    if (currentView === 'test-sessions') return 'new-test-session';
+    if (currentView === 'new-test-session' || currentView === 'test-sessions') return 'test-session';
+    if (currentView === 'data-acquisition') return 'observations';
     return currentView;
   };
 

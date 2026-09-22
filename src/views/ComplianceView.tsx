@@ -46,7 +46,14 @@ const VerdictBadge: React.FC<{ result: string }> = ({ result }) => {
 };
 
 export const ComplianceView: React.FC = () => {
-  const { draftSession, activeBackendSessionId, backendConnected, databaseConnected, setCurrentView } = useVerification();
+  const { 
+    draftSession, 
+    activeBackendSessionId, 
+    backendConnected, 
+    databaseConnected, 
+    setCurrentView,
+    proceedToStep 
+  } = useVerification();
   const [tests, setTests] = useState<ComplianceTestRow[]>(defaultComplianceTests);
   const [overallVerdict, setOverallVerdict] = useState<string>('PASS');
   const [evaluating, setEvaluating] = useState<boolean>(false);
@@ -144,8 +151,12 @@ export const ComplianceView: React.FC = () => {
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-space-md">
           <div>
             <div className="flex flex-wrap items-center gap-space-xs mb-1">
-              <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary font-label-mono-sm text-label-mono-sm font-semibold uppercase">STEP 4 // COMPLIANCE ENGINE</span>
-              <span className="px-2 py-0.5 rounded bg-surface-container-high text-secondary font-label-mono-sm text-label-mono-sm uppercase font-bold">OIML R-76:2006</span>
+              <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary font-label-mono-sm text-[11px] font-bold uppercase tracking-wider">
+                STEP 4 OF 6 // COMPLIANCE ENGINE
+              </span>
+              <span className="px-2 py-0.5 rounded bg-surface-container text-secondary font-label-mono-sm text-[11px] font-bold uppercase">
+                OIML R-76:2006
+              </span>
               {databaseConnected && (
                 <span className="px-2 py-0.5 rounded bg-tertiary-fixed/30 text-on-tertiary-container font-label-mono-sm text-label-mono-sm font-bold uppercase flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-on-tertiary-container"></span>
@@ -438,11 +449,11 @@ export const ComplianceView: React.FC = () => {
       {/* Navigation Footer */}
       <footer className="bg-surface-container-lowest p-space-md rounded-xl shadow-card flex flex-col sm:flex-row items-center justify-between gap-space-md mt-space-md">
         <button
-          onClick={() => setCurrentView('data-acquisition')}
-          className="btn-secondary"
+          onClick={() => setCurrentView('observations')}
+          className="btn-secondary text-xs h-[42px]"
         >
           <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-          Back to Data Acquisition
+          ← Back to Observations
         </button>
         <div className="flex items-center gap-space-sm">
           <button
@@ -461,16 +472,19 @@ export const ComplianceView: React.FC = () => {
               }
             }}
             disabled={evaluating || !activeBackendSessionId}
-            className="btn-secondary"
+            className="btn-secondary text-xs h-[42px]"
           >
             <span className="material-symbols-outlined text-[16px]">refresh</span>
             {evaluating ? 'Evaluating Session...' : 'Re-Evaluate All Points'}
           </button>
           <button
-            onClick={() => setCurrentView('evidence')}
-            className="btn-primary"
+            onClick={() => {
+              proceedToStep(5);
+              setCurrentView('results');
+            }}
+            className="btn-primary text-xs h-[42px] px-6 font-semibold"
           >
-            <span>Proceed to Evidence &amp; Photos</span>
+            <span>Proceed to Results Summary</span>
             <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
           </button>
         </div>

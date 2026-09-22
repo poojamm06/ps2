@@ -3,7 +3,7 @@ import { useVerification } from '../context/VerificationContext';
 import { reportsApi } from '../services/api';
 
 export const DigitalReportView: React.FC = () => {
-  const { draftSession, currentUser, activeBackendSessionId, backendConnected } = useVerification();
+  const { draftSession, currentUser, activeBackendSessionId, backendConnected, setCurrentView } = useVerification();
   const [sealLoading, setSealLoading] = useState(false);
   const [sealed, setSealed] = useState(false);
   const [reportData, setReportData] = useState<any>(null);
@@ -57,7 +57,7 @@ export const DigitalReportView: React.FC = () => {
     setTimeout(() => setDownloading(null), 1000);
   };
 
-  const verdict = reportData?.session?.compliance_verdict;
+  const verdict = reportData?.overall_result || reportData?.session?.compliance_verdict || 'PASS';
   const isPass = verdict === 'PASS';
   const isFail = verdict === 'FAIL';
   const isReview = verdict === 'REVIEW';
@@ -70,7 +70,9 @@ export const DigitalReportView: React.FC = () => {
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-space-md">
           <div>
             <div className="flex flex-wrap items-center gap-space-xs mb-1">
-              <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary font-label-mono-sm text-label-mono-sm font-semibold uppercase">STEP 8 // DIGITAL CERTIFICATE</span>
+              <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary font-label-mono-sm text-[11px] font-bold uppercase tracking-wider">
+                STEP 6 OF 6 // DIGITAL REPORT &amp; CERTIFICATE
+              </span>
               <span className="px-2 py-0.5 rounded bg-secondary-fixed text-on-secondary-fixed font-label-mono-sm text-label-mono-sm uppercase font-bold">OIML R-76/2006</span>
             </div>
             <h1 className="font-display-md text-display-md text-primary tracking-tight">Digital Verification Certificate</h1>
@@ -273,16 +275,25 @@ export const DigitalReportView: React.FC = () => {
 
       {/* Seal Footer */}
       <footer className="bg-surface-container-lowest p-space-md rounded-xl shadow-card flex flex-col sm:flex-row items-center justify-between gap-space-md">
-        <div className="flex items-center gap-2">
-          <span className={`material-symbols-outlined text-[22px] ${sealed ? 'text-on-tertiary-container' : 'text-outline'}`}>
-            {sealed ? 'verified' : 'lock_open'}
-          </span>
-          <div>
-            <div className="font-headline-sm text-body-md font-semibold text-primary">
-              {sealed ? 'Certificate Digitally Sealed & Timestamped' : 'Certificate Ready to Seal & Issue'}
-            </div>
-            <div className="font-label-mono-sm text-label-mono-sm text-outline">
-              {sealed ? `Sealed at ${new Date().toISOString()}` : 'Apply digital seal to finalize and lock record in repository'}
+        <div className="flex items-center gap-space-md">
+          <button
+            onClick={() => setCurrentView('results')}
+            className="btn-secondary text-xs h-[42px]"
+          >
+            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+            ← Back to Results
+          </button>
+          <div className="flex items-center gap-2">
+            <span className={`material-symbols-outlined text-[22px] ${sealed ? 'text-on-tertiary-container' : 'text-outline'}`}>
+              {sealed ? 'verified' : 'lock_open'}
+            </span>
+            <div>
+              <div className="font-headline-sm text-body-md font-semibold text-primary">
+                {sealed ? 'Certificate Digitally Sealed & Timestamped' : 'Certificate Ready to Seal & Issue'}
+              </div>
+              <div className="font-label-mono-sm text-label-mono-sm text-outline">
+                {sealed ? `Sealed at ${new Date().toISOString()}` : 'Apply digital seal to finalize and lock record in repository'}
+              </div>
             </div>
           </div>
         </div>

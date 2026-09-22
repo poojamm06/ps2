@@ -23,8 +23,10 @@ import {
   auditApi,
   dashboardApi,
   sessionsGenerateCode,
+  readingsApi,
   type ApiInstrument, 
-  type ApiTestSession 
+  type ApiTestSession,
+  type ApiReading
 } from '../services/api';
 
 export type NavigationKey = 
@@ -33,6 +35,8 @@ export type NavigationKey =
   | 'test-sessions'
   | 'new-test-session'
   | 'instruments'
+  | 'test-session'
+  | 'observations'
   | 'data-acquisition'
   | 'evidence'
   | 'compliance'
@@ -225,6 +229,8 @@ interface VerificationContextType {
   saveDraft: () => Promise<void>;
   createBackendSession: () => Promise<boolean>;
   createNewSession: (presetInstrument?: Instrument) => Promise<void>;
+  selectInstrument: (instrument: Instrument) => Promise<void>;
+  loadSessionReadings: (sessionId?: number) => Promise<ApiReading[]>;
   proceedToStep: (stepNumber: number) => void;
   selectSession: (sessionCode: string) => Promise<void>;
   refreshBackendData: () => Promise<void>;
@@ -471,7 +477,60 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     setActiveSessionId(newCode);
     setActiveBackendSessionId(null);
-    setCurrentView('new-test-session');
+    setCurrentView('test-session');
+  };
+
+  const selectInstrument = async (instrument: Instrument) => {
+    let newCode = `TS-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    try {
+      const codeResp = await sessionsGenerateCode();
+      newCode = codeResp.session_code;
+    } catch {
+      // Fallback
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const officerName = currentUser?.name || 'Insp. Helena Vance';
+    const instId = parseInt(instrument.id, 10) || null;
+
+    setActiveInstrumentId(instId);
+    setActiveBackendSessionId(null);
+    setActiveSessionId(newCode);
+
+    setDraftSession(prev => ({
+      ...prev,
+      manufacturer: instrument.manufacturer,
+      model: instrument.model,
+      serialNumber: instrument.serialNumber,
+      accuracyClass: instrument.accuracyClass,
+      maxCapacity: instrument.maxCapacity,
+      minCapacity: instrument.minCapacity,
+      unit: instrument.unit,
+      verificationScaleInterval_e: instrument.verificationScaleInterval_e,
+      actualScaleInterval_d: instrument.actualScaleInterval_d,
+      instrumentType: instrument.instrumentType,
+      softwareApplicable: instrument.softwareApplicable,
+      approvalCertificateNumber: instrument.approvalCertificateNumber,
+      verificationOfficer: officerName,
+      verificationDate: today,
+      sessionId: newCode,
+      backendSessionId: null,
+      backendInstrumentId: instId,
+      currentStep: 2,
+    }));
+
+    setCurrentView('test-session');
+  };
+
+  const loadSessionReadings = async (sessionId?: number): Promise<ApiReading[]> => {
+    const sid = sessionId || activeBackendSessionId;
+    if (!sid) return [];
+    try {
+      return await readingsApi.getSessionReadings(sid);
+    } catch (err) {
+      console.warn('Could not load readings from backend:', err);
+      return [];
+    }
   };
 
   // Creates/Registers instrument & session in PostgreSQL
@@ -700,6 +759,8 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         saveDraft,
         createBackendSession,
         createNewSession,
+        selectInstrument,
+        loadSessionReadings,
         proceedToStep,
         selectSession,
         refreshBackendData,

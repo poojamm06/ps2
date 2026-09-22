@@ -37,14 +37,19 @@ def verify():
     db = SessionLocal()
     try:
         print("\n=== Step 4: Persisting Test Instrument ===")
-        # Clean up existing test instrument if present
+        # Clean up existing test instrument and any dependent sessions
         existing_inst = (
             db.query(Instrument)
             .filter(Instrument.serial_number == "MT-EXP-2026-0982")
             .first()
         )
         if existing_inst:
-            print("Cleaning prior test instrument...")
+            print("Cleaning prior test instrument and dependent sessions...")
+            sessions = db.query(TestSession).filter(TestSession.instrument_id == existing_inst.id).all()
+            for s in sessions:
+                db.query(Reading).filter(Reading.session_id == s.id).delete()
+                db.query(ComplianceResult).filter(ComplianceResult.session_id == s.id).delete()
+                db.delete(s)
             db.delete(existing_inst)
             db.commit()
 

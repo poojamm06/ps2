@@ -7,20 +7,18 @@ export const AppHeader: React.FC = () => {
   const [userOpen, setUserOpen] = useState(false);
 
   const breadcrumbMap: Record<string, string[]> = {
-    'dashboard': ['Legal Metrology', 'Verification Dashboard'],
-    'new-test-session': ['Legal Metrology', 'Verification', 'Active Session'],
-    'test-sessions': ['Legal Metrology', 'Verification', 'Test Sessions'],
-    'instruments': ['Legal Metrology', 'Verification', 'Instruments'],
-    'data-acquisition': ['Legal Metrology', 'Verification', 'Data Acquisition'],
-    'evidence': ['Legal Metrology', 'Verification', 'Evidence Capture'],
-    'compliance': ['Legal Metrology', 'Verification', 'Compliance & Evidence'],
-    'fingerprint': ['Legal Metrology', 'Intelligence', 'Fingerprint & Anomaly'],
-    'software': ['Legal Metrology', 'Intelligence', 'WELMEC Software'],
-    'anomaly': ['Legal Metrology', 'Intelligence', 'Anomaly Intelligence'],
-    'results': ['Legal Metrology', 'Verification', 'Results Summary'],
-    'reports': ['Legal Metrology', 'Governance', 'Reports'],
-    'traceability': ['Legal Metrology', 'Governance', 'Traceability'],
-    'grc': ['Legal Metrology', 'Governance', 'GRC Analytics'],
+    'dashboard': ['Legal Metrology', 'Dashboard'],
+    'repository': ['Legal Metrology', 'Digital Repository'],
+    'instruments': ['Verification Workflow', 'Step 1: Instrument'],
+    'test-session': ['Verification Workflow', 'Step 2: Test Session'],
+    'new-test-session': ['Verification Workflow', 'Step 2: Test Session'],
+    'observations': ['Verification Workflow', 'Step 3: Observations'],
+    'data-acquisition': ['Verification Workflow', 'Step 3: Observations'],
+    'compliance': ['Verification Workflow', 'Step 4: Compliance Engine'],
+    'results': ['Verification Workflow', 'Step 5: Results Summary'],
+    'reports': ['Verification Workflow', 'Step 6: Digital Report'],
+    'traceability': ['Legal Metrology', 'Audit Trail'],
+    'grc': ['Legal Metrology', 'GRC Analytics'],
   };
 
   const crumbs = breadcrumbMap[currentView] || ['Legal Metrology', currentView];
@@ -44,10 +42,10 @@ export const AppHeader: React.FC = () => {
         <div className="h-4 w-px bg-outline-variant/50"></div>
 
         {/* Active Session Pill */}
-        {(currentView === 'new-test-session' || currentView === 'data-acquisition' || currentView === 'evidence' || currentView === 'compliance' || currentView === 'fingerprint' || currentView === 'software' || currentView === 'results') && (
+        {(currentView === 'test-session' || currentView === 'new-test-session' || currentView === 'observations' || currentView === 'data-acquisition' || currentView === 'compliance' || currentView === 'results' || currentView === 'reports') && (
           <div className="flex items-center gap-2 px-2.5 py-1 rounded bg-primary-container text-on-primary border border-primary font-label-mono-sm text-label-mono-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-secondary-container animate-pulse"></span>
-            <span className="tracking-wide">SESSION: {draftSession.sessionId} [OIML R-76 CLASS {draftSession.accuracyClass}]</span>
+            <span className="tracking-wide">SESSION: {draftSession.sessionId} [CLASS {draftSession.accuracyClass}]</span>
           </div>
         )}
 
