@@ -1,0 +1,284 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================
+   NAWI TRUST — Global Design System
+   Based on approved Stitch design (Material Design 3)
+   ================================================ */
+
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    overscroll-behavior: none;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background-color: #f8f9ff;
+    color: #0b1c30;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Hide scrollbar everywhere */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track { background: #eff4ff; }
+  ::-webkit-scrollbar-thumb { background: #c4c6cf; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #74777f; }
+
+  /* Material Symbols base config */
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    user-select: none;
+    display: inline-block;
+    line-height: 1;
+    vertical-align: middle;
+  }
+
+  * { box-sizing: border-box; }
+}
+
+@layer components {
+  /* ------------------------------------------------
+     Typography Utilities (matching Stitch scale)
+     ------------------------------------------------ */
+  .font-display-lg {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 32px;
+    line-height: 38px;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+  .font-display-md {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 24px;
+    line-height: 30px;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+  }
+  .font-headline-lg {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 20px;
+    line-height: 26px;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+  .font-headline-sm {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    line-height: 22px;
+    letter-spacing: -0.005em;
+    font-weight: 600;
+  }
+  .font-body-lg {
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    line-height: 22px;
+    font-weight: 400;
+  }
+  .font-body-md {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 400;
+  }
+  .font-body-sm {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+  }
+  .font-label-mono-lg {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 18px;
+    letter-spacing: 0.02em;
+    font-weight: 600;
+  }
+  .font-label-mono-md {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.01em;
+    font-weight: 500;
+  }
+  .font-label-mono-sm {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    line-height: 14px;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+  }
+
+  /* Text size helpers */
+  .text-display-lg  { font-size: 32px; line-height: 38px; }
+  .text-display-md  { font-size: 24px; line-height: 30px; }
+  .text-headline-lg { font-size: 20px; line-height: 26px; }
+  .text-headline-sm { font-size: 16px; line-height: 22px; }
+  .text-body-lg     { font-size: 15px; line-height: 22px; }
+  .text-body-md     { font-size: 13px; line-height: 18px; }
+  .text-body-sm     { font-size: 12px; line-height: 16px; }
+  .text-label-mono-lg { font-size: 14px; line-height: 18px; }
+  .text-label-mono-md { font-size: 12px; line-height: 16px; }
+  .text-label-mono-sm { font-size: 10px; line-height: 14px; }
+
+  /* ------------------------------------------------
+     Metrology-specific utilities
+     ------------------------------------------------ */
+  .metrology-mono {
+    font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* ------------------------------------------------
+     Status Badges (OIML Verdict)
+     ------------------------------------------------ */
+  .badge-pass {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold font-label-mono-sm tracking-wider;
+    background-color: #d1fae5;
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+  }
+  .badge-fail {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold font-label-mono-sm tracking-wider;
+    background-color: #ffdad6;
+    color: #93000a;
+    border: 1px solid #ffb4ab;
+  }
+  .badge-review {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold font-label-mono-sm tracking-wider;
+    background-color: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffcc80;
+  }
+  .badge-testing {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold font-label-mono-sm tracking-wider;
+    background-color: #e5eeff;
+    color: #314769;
+    border: 1px solid #c4c6cf;
+  }
+
+  /* ------------------------------------------------
+     OIML Accuracy Class Chips
+     ------------------------------------------------ */
+  .oiml-class-i {
+    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #eff4ff;
+    color: #314769;
+    border: 1px solid #93ccff;
+  }
+  .oiml-class-ii {
+    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #cce5ff;
+    color: #001d31;
+    border: 1px solid #5bb8fe;
+  }
+  .oiml-class-iii {
+    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #e5eeff;
+    color: #001026;
+    border: 1px solid #c4c6cf;
+  }
+  .oiml-class-iv {
+    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #d3e4fe;
+    color: #0b2545;
+    border: 1px solid #778db2;
+  }
+
+  /* ------------------------------------------------
+     Card Components
+     ------------------------------------------------ */
+  .nawi-card {
+    @apply bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20;
+  }
+  .nawi-card-inner {
+    @apply bg-surface-container-low rounded-lg;
+  }
+
+  /* ------------------------------------------------
+     Button Variants
+     ------------------------------------------------ */
+  .btn-primary {
+    @apply inline-flex items-center gap-1.5 px-space-md py-2 rounded-lg font-label-mono-sm text-label-mono-sm font-semibold text-on-primary bg-primary hover:bg-primary-container transition-colors shadow-sm;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-1.5 px-space-md py-2 rounded-lg font-label-mono-sm text-label-mono-sm font-semibold text-primary bg-surface-container hover:bg-surface-container-high transition-colors shadow-sm;
+  }
+  .btn-outline {
+    @apply inline-flex items-center gap-1.5 px-space-md py-2 rounded-lg font-label-mono-sm text-label-mono-sm font-semibold text-secondary bg-surface-container-lowest border border-outline-variant hover:bg-surface-container-low transition-colors;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-1.5 px-space-sm py-1.5 rounded font-label-mono-sm text-label-mono-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors;
+  }
+
+  /* ------------------------------------------------
+     Table Styles
+     ------------------------------------------------ */
+  .nawi-table {
+    @apply w-full text-body-md;
+  }
+  .nawi-table thead tr {
+    @apply bg-surface-container-low border-b border-outline-variant/40;
+  }
+  .nawi-table thead th {
+    @apply px-3 py-2.5 text-left font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider font-semibold;
+  }
+  .nawi-table tbody tr {
+    @apply border-b border-outline-variant/20 hover:bg-surface-container-low transition-colors;
+  }
+  .nawi-table tbody td {
+    @apply px-3 py-2.5 text-on-surface;
+  }
+
+  /* ------------------------------------------------
+     Form Inputs
+     ------------------------------------------------ */
+  .nawi-input {
+    @apply w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-body-md placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-1 focus:ring-secondary focus:border-secondary transition-colors;
+  }
+  .nawi-label {
+    @apply block font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider font-semibold mb-1;
+  }
+  .nawi-select {
+    @apply nawi-input appearance-none cursor-pointer;
+  }
+
+  /* ------------------------------------------------
+     Section / Page Layout
+     ------------------------------------------------ */
+  .page-section {
+    @apply bg-surface-container-lowest p-space-lg rounded-xl shadow-card space-y-space-md;
+  }
+  .section-header-bar {
+    @apply w-2 h-5 bg-secondary rounded-sm flex-shrink-0;
+  }
+
+  /* ------------------------------------------------
+     Anomaly Severity Chips
+     ------------------------------------------------ */
+  .severity-anomaly {
+    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #ffdad6;
+    color: #93000a;
+    border: 1px solid #ffb4ab;
+  }
+  .severity-attention {
+    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffcc80;
+  }
+  .severity-normal {
+    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #e5eeff;
+    color: #314769;
+    border: 1px solid #c4c6cf;
+  }
+}
