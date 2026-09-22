@@ -5,6 +5,10 @@
 .env.*
 !.env.example
 *.env
+*.pem
+*.key
+*.cert
+*.crt
 
 # ==========================================
 # Node / Frontend (Vite + React)
@@ -14,6 +18,13 @@ dist/
 dist-ssr/
 build/
 *.local
+.npm/
+.eslintcache
+*.tsbuildinfo
+
+# Coverage & test artifacts
+coverage/
+.nyc_output/
 
 # Logs
 logs/
@@ -42,11 +53,14 @@ backend/venv/
 backend/env/
 backend/.venv/
 
-# Testing & Coverage
+# Testing, Linting & Coverage
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .tox/
+.mypy_cache/
+.ruff_cache/
 
 # Local databases and SQLite
 *.sqlite
@@ -55,9 +69,20 @@ htmlcov/
 backend/*.db
 backend/*.sqlite3
 
-# Uploaded / Generated evidence files (keep folder with .gitkeep)
+# Uploaded / Generated evidence files & local storage
+backend/storage/
 backend/app/storage/evidence/*
 !backend/app/storage/evidence/.gitkeep
+uploads/
+storage/
+
+# Large ML / OCR Models & Weights (exceeds GitHub 100MB file limit)
+*.onnx
+*.pt
+*.pth
+*.bin
+*.weights
+models/
 
 # ==========================================
 # Operating System & IDEs
@@ -84,3 +109,9 @@ desktop.ini
 *.sw?
 *.swp
 *.swo
+
+# Temporary & backup files
+*.tmp
+*.temp
+*.bak
+*~
