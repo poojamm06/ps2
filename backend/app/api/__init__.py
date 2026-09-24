@@ -14,6 +14,7 @@ from app.api.readings import router as readings_router
 from app.api.reports import router as reports_router
 from app.api.repository import router as repository_router
 from app.api.sessions import router as sessions_router
+from app.api.software_exam import router as software_exam_router
 from app.api.software_verification import router as software_verification_router
 
 api_router = APIRouter(prefix="/api")
@@ -30,5 +31,6 @@ api_router.include_router(repository_router)
 api_router.include_router(audit_router)
 api_router.include_router(anomaly_router)
 api_router.include_router(software_verification_router)
+api_router.include_router(software_exam_router)
 
 __all__ = ["api_router"]
