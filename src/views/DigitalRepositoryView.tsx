@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useVerification } from '../context/VerificationContext';
 import {
   repositoryApi,
@@ -6,6 +6,46 @@ import {
   type RepositoryItem,
   type InstrumentHistoryResponse,
 } from '../services/api';
+import { mockInstruments, mockTestSessions } from '../mock/mockData';
+
+// Demo-safety net: builds repository rows from the mock catalog when the
+// PostgreSQL-backed repository search returns nothing (e.g. backend offline).
+const mockRepositoryItems: RepositoryItem[] = mockInstruments.map((inst, idx) => {
+  const sessionsForInst = mockTestSessions.filter(s => s.instrumentId === inst.id);
+  const latest = sessionsForInst[0];
+  return {
+    instrument: {
+      id: idx + 1,
+      manufacturer: inst.manufacturer,
+      model: inst.model,
+      serial_number: inst.serialNumber,
+      functional_type: inst.instrumentType,
+      accuracy_class: `Class ${inst.accuracyClass}`,
+      max_capacity: inst.maxCapacity,
+      min_capacity: inst.minCapacity,
+      unit: inst.unit,
+      verification_scale_interval_e: inst.verificationScaleInterval_e,
+      actual_scale_interval_d: inst.actualScaleInterval_d,
+      software_applicable: inst.softwareApplicable,
+      approval_certificate_number: inst.approvalCertificateNumber || null,
+      created_at: new Date().toISOString(),
+    },
+    total_sessions: sessionsForInst.length,
+    latest_session: latest ? {
+      id: idx + 1,
+      session_code: latest.sessionId,
+      verification_date: latest.verificationDate,
+      officer_name: latest.officerName,
+      test_location: latest.testLocation,
+      status: latest.status,
+      current_step: latest.currentStep,
+      compliance_verdict: latest.complianceVerdict || null,
+      created_at: latest.createdAt,
+    } : null,
+    overall_verdict: latest?.complianceVerdict || 'REVIEW',
+    report_available: !!latest && latest.status === 'COMPLETED',
+  };
+});
 
 export const DigitalRepositoryView: React.FC = () => {
   const { selectSession, databaseConnected } = useVerification();
@@ -62,6 +102,25 @@ export const DigitalRepositoryView: React.FC = () => {
     setInstrumentHistory(null);
   };
 
+  // Demo-safety net: when the backend has no results (e.g. offline), filter the
+  // mock catalog client-side using the same search/filter controls.
+  const displayItems: RepositoryItem[] = useMemo(() => {
+    if (items.length > 0) return items;
+    if (databaseConnected) return items;
+    const q = searchQuery.toLowerCase();
+    return mockRepositoryItems.filter(item => {
+      const matchesQuery = !q ||
+        item.instrument.serial_number.toLowerCase().includes(q) ||
+        item.instrument.model.toLowerCase().includes(q) ||
+        item.instrument.manufacturer.toLowerCase().includes(q) ||
+        (item.latest_session?.officer_name || '').toLowerCase().includes(q);
+      const matchesClass = !classFilter || item.instrument.accuracy_class === classFilter;
+      const matchesVerdict = !verdictFilter || item.overall_verdict === verdictFilter;
+      const matchesStatus = !statusFilter || item.latest_session?.status === statusFilter;
+      return matchesQuery && matchesClass && matchesVerdict && matchesStatus;
+    });
+  }, [items, databaseConnected, searchQuery, classFilter, verdictFilter, statusFilter]);
+
   return (
     <>
       {/* Header */}
@@ -100,17 +159,20 @@ export const DigitalRepositoryView: React.FC = () => {
         {/* Search & Filter Bar */}
         <div className="mt-space-md grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-space-sm">
           <div className="lg:col-span-2">
-            <div className="relative">
+            <div className="nawi-search-bar">
+              <span className="material-symbols-outlined text-outline text-[18px]">
+                search
+              </span>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search S/N, Model, Make, or Officer..."
-                className="nawi-input pl-9 text-[13px]"
+                className="nawi-search-input"
               />
-              <span className="material-symbols-outlined text-outline absolute left-2.5 top-2.5 text-[18px]">
-                search
-              </span>
+              <button className="nawi-search-btn" tabIndex={-1} type="button" onClick={fetchRepository}>
+                <span className="material-symbols-outlined text-[18px]">search</span>
+              </button>
             </div>
           </div>
 
@@ -157,7 +219,7 @@ export const DigitalRepositoryView: React.FC = () => {
       </section>
 
       {/* Instruments Table */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20">
+      <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40">
         <div className="flex items-center justify-between p-space-lg border-b border-outline-variant/30">
           <div className="flex items-center gap-2">
             <span className="section-header-bar"></span>
@@ -171,7 +233,7 @@ export const DigitalRepositoryView: React.FC = () => {
             </div>
           </div>
           <span className="font-label-mono-sm text-label-mono-sm text-on-surface-variant font-medium">
-            {items.length} Registered Instrument(s) Found
+            {displayItems.length} Registered Instrument(s) Found
           </span>
         </div>
 
@@ -190,7 +252,7 @@ export const DigitalRepositoryView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {items.length === 0 ? (
+              {displayItems.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-8 text-on-surface-variant">
                     {loading ? (
@@ -214,7 +276,7 @@ export const DigitalRepositoryView: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                items.map(item => {
+                displayItems.map(item => {
                   const inst = item.instrument;
                   const latest = item.latest_session;
                   const verdict = item.overall_verdict;

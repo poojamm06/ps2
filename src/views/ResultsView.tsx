@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useVerification } from '../context/VerificationContext';
 import { complianceApi, readingsApi } from '../services/api';
+import { getMpeForLoad } from '../utils/oimlMpe';
 
 interface ResultMetric {
   label: string;
@@ -28,18 +29,127 @@ export const ResultsView: React.FC = () => {
   const [readingCount, setReadingCount] = useState<number | null>(null);
   const [passCount, setPassCount] = useState<number | null>(null);
   const [failCount, setFailCount] = useState<number | null>(null);
+  const [isLocalEstimate, setIsLocalEstimate] = useState(false);
+
+  // Deterministic local fallback — computes the same OIML R-76 Table 6 MPE
+  // verdict from the in-progress draft observations when the backend
+  // evaluation is unavailable, so this screen never dead-ends the demo.
+  const deriveLocalResults = useCallback(() => {
+    const points = (draftSession.staticWeighingPoints || []).filter(
+      pt => pt.appliedLoad?.trim() && pt.indication?.trim() &&
+            !isNaN(parseFloat(pt.appliedLoad)) && !isNaN(parseFloat(pt.indication))
+    );
+
+    if (points.length === 0) {
+      setOverallVerdict(null);
+      setReadingCount(null);
+      setPassCount(null);
+      setFailCount(null);
+      setMetrics([]);
+      return;
+    }
+
+    const unit = draftSession.unit || 'g';
+    const accuracyClass = draftSession.accuracyClass || 'II';
+    const e = draftSession.verificationScaleInterval_e || 0.1;
+
+    const evaluated = points.map(pt => {
+      const load = parseFloat(pt.appliedLoad);
+      const ind = parseFloat(pt.indication);
+      const delta = parseFloat(pt.additionalLoadDeltaL) || 0;
+      const e0 = parseFloat(pt.zeroErrorE0) || 0;
+      const P = ind + 0.5 * e - delta;
+      const error = (P - load) - e0;
+      const mpe = getMpeForLoad(load, e, accuracyClass, unit);
+      return { error, mpeLimit: mpe.limitValue, result: Math.abs(error) <= mpe.limitValue ? 'PASS' : 'FAIL' };
+    });
+
+    const total = evaluated.length;
+    const passed = evaluated.filter(r => r.result === 'PASS').length;
+    const failed = total - passed;
+    const verdict = failed > 0 ? 'FAIL' : 'PASS';
+
+    setOverallVerdict(verdict);
+    setReadingCount(total);
+    setPassCount(passed);
+    setFailCount(failed);
+    setIsLocalEstimate(true);
+
+    const errors = evaluated.map(r => r.error);
+    const meanErr = errors.reduce((acc, v) => acc + v, 0) / errors.length;
+    const maxAbsErr = Math.max(...errors.map(v => Math.abs(v)));
+    const variance = errors.reduce((acc, v) => acc + Math.pow(v - meanErr, 2), 0) / errors.length;
+    const stdDev = Math.sqrt(variance);
+
+    const compRate = ((passed / total) * 100).toFixed(1);
+    const localMetrics: ResultMetric[] = [
+      {
+        label: 'Compliance Rate (MPE)',
+        value: `${compRate}%`,
+        sub: `${passed}/${total} readings within OIML R-76 MPE`,
+        color: failed === 0 ? 'text-on-tertiary-container' : 'text-error',
+      },
+      ...(failed > 0 ? [{
+        label: 'Failed Test Points',
+        value: String(failed),
+        sub: 'Readings exceeding OIML R-76 MPE — FAIL verdict',
+        color: 'text-error',
+      }] : []),
+      {
+        label: 'Mean Error (μ)',
+        value: `${meanErr >= 0 ? '+' : ''}${meanErr.toFixed(4)} ${unit}`,
+        sub: 'Average error of indication across all test points',
+        color: 'text-secondary',
+      },
+      {
+        label: 'Max Absolute Error',
+        value: `${maxAbsErr.toFixed(4)} ${unit}`,
+        sub: 'Peak error observed relative to reference mass',
+        color: failed > 0 ? 'text-error' : 'text-on-tertiary-container',
+      },
+      {
+        label: 'Repeatability Dispersion (σ)',
+        value: `${stdDev.toFixed(4)} ${unit}`,
+        sub: 'Standard deviation of observation errors',
+        color: 'text-on-surface',
+      },
+    ];
+    setMetrics(localMetrics);
+
+    setStepStatuses({
+      '1': draftSession.manufacturer ? 'complete' : 'pending',
+      '2': draftSession.sessionId ? 'complete' : 'pending',
+      '3': total > 0 ? 'complete' : 'pending',
+      '4': verdict === 'PASS' ? 'pass' : 'fail',
+      '5': 'current',
+      '6': 'pending',
+    });
+  }, [draftSession.staticWeighingPoints, draftSession.unit, draftSession.accuracyClass, draftSession.verificationScaleInterval_e, draftSession.manufacturer, draftSession.sessionId]);
 
   const loadResults = useCallback(async () => {
-    if (!activeBackendSessionId || !backendConnected) return;
+    setIsLocalEstimate(false);
+
+    // Real backend first.
+    if (!activeBackendSessionId || !backendConnected) {
+      deriveLocalResults();
+      return;
+    }
     setVerdictLoading(true);
 
     try {
       // 1. Fetch compliance result (OIML R-76 deterministic verdict)
       const compliance = await complianceApi.getSessionCompliance(activeBackendSessionId).catch(() => null);
-      
+
       // 2. Fetch all readings
       const readings = await readingsApi.getSessionReadings(activeBackendSessionId).catch(() => []);
-      
+
+      // Deterministic mock fallback on failure — no readings/compliance yet
+      // reachable from the backend, so fall back to the local draft data.
+      if (!compliance?.overall_result && (!readings || readings.length === 0)) {
+        deriveLocalResults();
+        return;
+      }
+
       // Determine verdict from compliance result or readings
       let verdict: string | null = null;
       if (compliance?.overall_result) {
@@ -132,11 +242,12 @@ export const ResultsView: React.FC = () => {
       setMetrics(newMetrics);
 
     } catch (err) {
-      console.error('Error loading results:', err);
+      console.warn('Backend results unavailable, using local fallback:', err);
+      deriveLocalResults();
     } finally {
       setVerdictLoading(false);
     }
-  }, [activeBackendSessionId, backendConnected, draftSession.manufacturer, draftSession.softwareApplicable, draftSession.unit]);
+  }, [activeBackendSessionId, backendConnected, draftSession.manufacturer, draftSession.softwareApplicable, draftSession.unit, deriveLocalResults]);
 
   useEffect(() => {
     loadResults();
@@ -187,7 +298,7 @@ export const ResultsView: React.FC = () => {
 
       {/* Instrument Summary Card */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-md">
-        <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg">
+        <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
           <div className="flex items-center gap-2 mb-space-md">
             <span className="section-header-bar"></span>
             <h3 className="font-headline-sm text-headline-sm text-primary font-bold">Instrument &amp; Session Identification</h3>
@@ -220,7 +331,7 @@ export const ResultsView: React.FC = () => {
         </div>
 
         {/* Workflow Completion */}
-        <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg">
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
           <div className="flex items-center gap-2 mb-space-md">
             <span className="section-header-bar"></span>
             <h3 className="font-headline-sm text-headline-sm text-primary font-bold">Workflow Completion</h3>
@@ -267,10 +378,10 @@ export const ResultsView: React.FC = () => {
             { label: 'PASS', value: String(passCount ?? 0), color: 'text-on-tertiary-container' },
             { label: 'FAIL', value: String(failCount ?? 0), color: failCount ? 'text-error' : 'text-on-tertiary-container' },
           ].map(stat => (
-            <div key={stat.label} className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-md text-center">
+            <div key={stat.label} className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-md text-center">
               <div className="font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider mb-1">{stat.label}</div>
               <div className={`metrology-mono text-3xl font-bold ${stat.color}`}>{stat.value}</div>
-              <div className="font-label-mono-sm text-[10px] text-outline mt-1">from PostgreSQL</div>
+              <div className="font-label-mono-sm text-[10px] text-outline mt-1">{isLocalEstimate ? 'local estimate' : 'from PostgreSQL'}</div>
             </div>
           ))}
         </div>
@@ -278,7 +389,7 @@ export const ResultsView: React.FC = () => {
 
       {/* Performance Metrics — from real backend fingerprint + readings */}
       {metrics.length > 0 && (
-        <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg">
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
           <div className="flex items-center gap-2 mb-space-md">
             <span className="section-header-bar"></span>
             <div>
@@ -298,17 +409,17 @@ export const ResultsView: React.FC = () => {
         </div>
       )}
 
-      {/* No Session Warning */}
-      {!activeBackendSessionId && (
-        <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-xl text-center">
+      {/* No Data Warning — only when there's genuinely nothing to show */}
+      {!overallVerdict && !verdictLoading && (
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-xl text-center">
           <span className="material-symbols-outlined text-[48px] text-outline mb-4">assignment</span>
-          <h3 className="font-headline-sm text-headline-sm text-primary font-bold">No Active Session</h3>
+          <h3 className="font-headline-sm text-headline-sm text-primary font-bold">No Observations Recorded Yet</h3>
           <p className="font-body-md text-body-md text-on-surface-variant mt-2">
-            Create or resume a verification session to see results.
+            Record at least one test point in Observations to see a verdict here.
           </p>
-          <button onClick={() => setCurrentView('new-test-session')} className="btn-primary mt-4">
-            <span className="material-symbols-outlined text-[16px]">add_circle</span>
-            Start New Session
+          <button onClick={() => setCurrentView('observations')} className="btn-primary mt-4">
+            <span className="material-symbols-outlined text-[16px]">sensors</span>
+            Go to Observations
           </button>
         </div>
       )}

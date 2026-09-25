@@ -7,7 +7,7 @@ OCR extraction outcomes, confidence scores, and consistency evaluations.
 """
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -58,6 +58,13 @@ class EvidenceItem(Base):
     # Status: MATCH, MISMATCH, REVIEW, NOT_DETECTED, NOT_EVALUATED
     consistency_status = Column(String(50), nullable=False, default="NOT_EVALUATED")
     consistency_details = Column(Text, nullable=True)
+
+    # Inspector corrections to OCR-extracted fields, stored separately from the
+    # original OCR output so "OCR Extracted" vs "Manually Corrected" is always
+    # distinguishable. JSON: {field_name: corrected_value}.
+    corrected_fields_json = Column(Text, nullable=True)
+    has_corrections = Column(Boolean, nullable=False, default=False)
+    was_mock_extraction = Column(Boolean, nullable=False, default=False)
 
     # Timestamps
     created_at = Column(

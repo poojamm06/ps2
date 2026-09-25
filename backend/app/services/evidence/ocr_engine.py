@@ -31,6 +31,7 @@ except ImportError:
     PYTESSERACT_AVAILABLE = False
 
 from app.services.evidence.image_processing import load_image, preprocess_for_ocr
+from app.services.evidence.mock_extraction import generate_mock_ocr_result
 
 
 def get_tesseract_path() -> Optional[str]:
@@ -418,20 +419,51 @@ def parse_metrological_fields(raw_text: str, overall_conf: float) -> Dict[str, D
     else:
         results["approval_certificate_number"] = {"value": None, "confidence": 0.0, "raw_match": None}
 
+    # 11. Legally-relevant Software / Firmware ID (where visible on nameplate/display)
+    sw_match = re.search(
+        r"(?:Software\s*ID|SW\s*ID|Firmware(?:\s*Version)?|FW\s*Ver(?:sion)?\.?|Software\s*Ver(?:sion)?\.?)\s*[:\-=]?\s*([A-Za-z0-9][A-Za-z0-9\.\-_]{2,40})",
+        cleaned_singleline,
+        re.IGNORECASE
+    )
+    if sw_match:
+        results["software_id"] = {
+            "value": sw_match.group(1).strip().rstrip(".,;:"),
+            "confidence": min(95.0, max(60.0, overall_conf if overall_conf > 0 else 70.0)),
+            "raw_match": sw_match.group(0),
+        }
+    else:
+        results["software_id"] = {"value": None, "confidence": 0.0, "raw_match": None}
+
     return results
 
 
-def process_evidence_ocr(file_path: str) -> Dict[str, Any]:
+def process_evidence_ocr(file_path: str, instrument: Optional[Any] = None) -> Dict[str, Any]:
     """
     High-level OCR pipeline:
     1. Runs image loading and OpenCV multi-stage preprocessing.
     2. Runs RapidOCR/Tesseract OCR extraction.
     3. Parses OIML R-76 metrological parameters.
     4. Computes field confidences.
-    
+
+    Demo-safety net: if no real OCR engine produced any text at all (neither
+    RapidOCR nor Tesseract available/working), falls back to a deterministic
+    mock extraction so the demo never shows an empty result. Real extraction
+    is ALWAYS tried first — this only fires when it genuinely can't run.
+
     Returns structured dictionary matching Pydantic OcrStructuredData schema.
     """
     raw_text, overall_conf, words, status_note = extract_raw_ocr(file_path)
+
+    if not raw_text.strip():
+        mock_result = generate_mock_ocr_result(instrument)
+        return {
+            "raw_text": mock_result["raw_text"],
+            "overall_confidence": mock_result["overall_confidence"],
+            "status_note": mock_result["status_note"],
+            "fields": mock_result["fields"],
+            "is_mock": True,
+        }
+
     fields = parse_metrological_fields(raw_text, overall_conf)
 
     return {
@@ -439,4 +471,5 @@ def process_evidence_ocr(file_path: str) -> Dict[str, Any]:
         "overall_confidence": overall_conf,
         "status_note": status_note,
         "fields": fields,
+        "is_mock": False,
     }

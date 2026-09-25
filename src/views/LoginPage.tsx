@@ -33,53 +33,55 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen flex flex-col justify-center items-center bg-surface px-6 py-12"
-      style={{
-        backgroundImage: 'radial-gradient(#c4c6cf 0.75px, transparent 0.75px)',
-        backgroundSize: '20px 20px',
-      }}
+      className="min-h-screen flex flex-col justify-center items-center px-6 py-12 relative overflow-hidden"
+      style={{ background: 'linear-gradient(160deg, #F6F5FF 0%, #EEEBFF 55%, #E0D9FF 100%)' }}
     >
-      {/* Platform Authority Banner */}
-      <div className="text-center mb-8 max-w-sm">
-        <div className="w-14 h-14 rounded-xl bg-primary-container flex items-center justify-center text-on-primary mx-auto mb-4 shadow-card">
+      {/* Decorative blobs */}
+      <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-[#5B4BFF]/10 pointer-events-none" />
+      <div className="absolute -bottom-32 -right-16 w-96 h-96 rounded-full bg-[#7C3AED]/10 pointer-events-none" />
+
+      {/* Emblem + wordmark */}
+      <div className="text-center mb-8 max-w-sm relative z-10">
+        <div
+          className="w-16 h-16 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-hero"
+          style={{ background: 'linear-gradient(135deg, #5B4BFF, #7C3AED)' }}
+        >
           <span className="material-symbols-outlined text-[32px]">scale</span>
         </div>
 
-        <h1 className="font-display-lg text-display-lg text-primary tracking-tight">NAWI TRUST</h1>
+        <h1 className="font-display-lg text-display-lg text-on-surface tracking-tight">NAWI Trust</h1>
         <p className="font-body-md text-body-md text-on-surface-variant mt-2">
-          Intelligent Metrological Verification &amp; Compliance Platform
+          OIML R-76 verification &amp; trust-verification platform for weighing instruments
         </p>
-        <div className="mt-3 inline-flex items-center gap-2 px-2.5 py-1 rounded bg-surface-container-high border border-outline-variant/50">
-          <span className="material-symbols-outlined text-[14px] text-secondary">verified_user</span>
-          <span className="font-label-mono-sm text-label-mono-sm text-secondary font-semibold uppercase tracking-wider">
-            OIML R-76 Conforming Architecture
+        <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white shadow-card">
+          <span className="material-symbols-outlined text-[14px] text-primary">verified_user</span>
+          <span className="font-body-sm text-body-sm text-primary font-semibold">
+            Dept. of Consumer Affairs · Legal Metrology
           </span>
         </div>
       </div>
 
       {/* Login Card */}
-      <div className="w-full max-w-md bg-surface-container-lowest rounded-xl shadow-card-hover border border-outline-variant/40 overflow-hidden">
-        <div className="p-6 border-b border-outline-variant/30">
-          <h2 className="font-headline-lg text-headline-lg text-primary">Officer Authentication</h2>
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-hero overflow-hidden relative z-10">
+        <div className="p-6 pb-4">
+          <h2 className="font-headline-lg text-headline-lg text-on-surface">Officer Login</h2>
           <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-            Enter your credentials to access the legal metrology workspace.
+            Sign in to access the verification workspace.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* Error */}
+        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
           {errorMsg && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-error-container border border-error/30">
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-[#FEE2E2]">
               <span className="material-symbols-outlined text-[18px] text-error flex-shrink-0 mt-0.5">error</span>
-              <span className="font-body-md text-body-sm text-on-error-container">{errorMsg}</span>
+              <span className="font-body-md text-body-sm text-error">{errorMsg}</span>
             </div>
           )}
 
-          {/* Officer ID */}
           <div>
             <label className="nawi-label">Officer ID / Official Email</label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-outline">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-outline">
                 person
               </span>
               <input
@@ -87,16 +89,15 @@ export const LoginPage: React.FC = () => {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="e.g. h.vance@metrology.gov or LM-8492"
-                className="nawi-input pl-9"
+                className="nawi-input pl-10"
               />
             </div>
           </div>
 
-          {/* Password */}
           <div>
             <label className="nawi-label">Secure Password / PKI PIN</label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-outline">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-outline">
                 lock
               </span>
               <input
@@ -104,72 +105,64 @@ export const LoginPage: React.FC = () => {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Enter secure password"
-                className="nawi-input pl-9 pr-10"
+                className="nawi-input pl-10 pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-outline hover:text-primary transition-colors"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[18px] text-outline hover:text-primary transition-colors"
               >
                 {showPassword ? 'visibility_off' : 'visibility'}
               </button>
             </div>
           </div>
 
-          {/* Remember + Reset */}
           <div className="flex items-center justify-between">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" defaultChecked className="w-3.5 h-3.5 accent-secondary" />
-              <span className="font-body-md text-body-sm text-on-surface-variant">Remember terminal</span>
+              <input type="checkbox" defaultChecked className="w-3.5 h-3.5 accent-primary rounded" />
+              <span className="font-body-md text-body-sm text-on-surface-variant">Remember this device</span>
             </label>
-            <a href="#" onClick={e => e.preventDefault()} className="font-body-md text-body-sm text-secondary hover:text-primary transition-colors">
-              Assistance / Token Reset
+            <a href="#" onClick={e => e.preventDefault()} className="font-body-md text-body-sm text-primary hover:text-[#3D2FE0] transition-colors font-medium">
+              Need help?
             </a>
           </div>
 
-          {/* Sign In */}
           <button
             type="submit"
             disabled={loading}
-            className="btn-primary w-full justify-center py-2.5 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="btn-primary w-full justify-center py-3 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? (
               <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
             ) : (
               <span className="material-symbols-outlined text-[16px]">login</span>
             )}
-            Sign In to Verification Platform
+            Login
           </button>
 
-          {/* Divider */}
           <div className="relative flex items-center gap-3">
-            <div className="flex-1 h-px bg-outline-variant/40"></div>
-            <span className="font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider">Demonstration Access</span>
-            <div className="flex-1 h-px bg-outline-variant/40"></div>
+            <div className="flex-1 h-px bg-outline-variant"></div>
+            <span className="font-body-sm text-body-sm text-on-surface-variant">or</span>
+            <div className="flex-1 h-px bg-outline-variant"></div>
           </div>
 
-          {/* Demo Login */}
           <button
             type="button"
             onClick={handleDemoAccess}
             disabled={loading}
-            className="btn-outline w-full justify-center py-2.5 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="btn-outline w-full justify-center py-3 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span className="material-symbols-outlined text-[16px]">badge</span>
-            Demo Login — Insp. Helena Vance (LMO)
+            Demo Inspector Login
           </button>
         </form>
       </div>
 
       {/* Footer Notice */}
-      <div className="mt-6 text-center max-w-md">
-        <div className="flex items-center justify-center gap-2 font-label-mono-sm text-label-mono-sm text-on-surface-variant mb-2">
-          <span className="material-symbols-outlined text-[14px] text-on-tertiary-container">verified</span>
-          Legal Metrology Verification Platform
-        </div>
-        <p className="font-body-sm text-body-sm text-outline leading-relaxed">
-          Authorized use only. All metrological test decisions are strictly governed by deterministic
-          rule-based algorithms conforming to National Weights &amp; Measures Directives and OIML R-76.
+      <div className="mt-6 text-center max-w-md relative z-10">
+        <p className="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+          Authorized use only. All metrological verdicts are governed by deterministic
+          rule-based algorithms conforming to National Legal Metrology directives and OIML R-76.
         </p>
       </div>
     </div>

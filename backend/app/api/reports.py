@@ -89,6 +89,8 @@ def _assemble_session_report_data(session_id: int, db: Session) -> Dict[str, Any
             "ocr_status": ev.ocr_status,
             "ocr_confidence": ev.ocr_confidence,
             "consistency_status": ev.consistency_status,
+            "has_corrections": bool(getattr(ev, "has_corrections", False)),
+            "was_mock_extraction": bool(getattr(ev, "was_mock_extraction", False)),
         }
         for ev in evidence_items
     ]

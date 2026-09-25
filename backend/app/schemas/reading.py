@@ -19,7 +19,7 @@ class ReadingCreate(BaseModel):
     test_point: str = Field(..., min_length=1, max_length=100, examples=["Weighing Performance (500g)"])
     reference_value: float = Field(..., examples=[500.0])
     indicated_value: float = Field(..., examples=[500.2])
-    mpe: Optional[float] = Field(default=None, gt=0, examples=[0.05])
+    mpe: Optional[float] = Field(default=None, ge=0, examples=[0.05])
     unit: str = Field(default="g", max_length=10, examples=["g"])
 
 

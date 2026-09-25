@@ -1,0 +1,27 @@
+{
+  "instrument_serial": "MT-XP205-89410",
+  "manufacturer": "Mettler-Toledo Inc.",
+  "model": "Excellence XPR205 Analytical",
+  "accuracy_class": "I",
+  "verification_scale_interval_e": 0.001,
+  "unit": "g",
+  "enrolment_certificate": "T8942-OIML-R76",
+  "readings": [
+    { "test_point": "Weighing Performance", "reference_value": 50, "indicated_value": 50.000 },
+    { "test_point": "Weighing Performance", "reference_value": 100, "indicated_value": 100.001 },
+    { "test_point": "Weighing Performance", "reference_value": 150, "indicated_value": 150.002 },
+    { "test_point": "Weighing Performance", "reference_value": 200, "indicated_value": 200.003 },
+    { "test_point": "Weighing Performance", "reference_value": 205, "indicated_value": 205.003 },
+    { "test_point": "Weighing Performance", "reference_value": 210, "indicated_value": 210.004 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 100.000 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 100.001 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 99.999 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 100.000 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 100.001 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.001 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.002 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.000 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.001 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.002 }
+  ]
+}

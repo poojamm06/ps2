@@ -3,7 +3,7 @@
  * Connects the React Frontend with the FastAPI + PostgreSQL backend.
  */
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://192.168.1.4:8000';
 
 /* ---- Typed API Models Matching Backend Schemas ---- */
 
@@ -151,6 +151,9 @@ export interface ApiOcrFieldResult {
   value: string | null;
   confidence: number;
   status: 'EXTRACTED' | 'UNCERTAIN' | 'NOT_DETECTED';
+  confidence_band?: 'HIGH' | 'MEDIUM' | 'NEEDS_REVIEW' | 'NONE';
+  is_corrected?: boolean;
+  raw_ocr_value?: string | null;
 }
 
 export interface ApiOcrStructuredData {
@@ -163,6 +166,8 @@ export interface ApiOcrStructuredData {
   actual_scale_interval_d: ApiOcrFieldResult;
   accuracy_class: ApiOcrFieldResult;
   unit: ApiOcrFieldResult;
+  software_id: ApiOcrFieldResult;
+  approval_certificate_number: ApiOcrFieldResult;
 }
 
 export interface ApiEvidenceItem {
@@ -181,6 +186,8 @@ export interface ApiEvidenceItem {
   ocr_data?: ApiOcrStructuredData | null;
   consistency_status: 'MATCH' | 'MISMATCH' | 'REVIEW' | 'NOT_DETECTED' | 'NOT_RUN' | string;
   consistency_details?: string | null;
+  has_corrections?: boolean;
+  was_mock_extraction?: boolean;
   created_at: string;
 }
 
@@ -333,6 +340,12 @@ export const evidenceApi = {
       method: 'DELETE',
     }),
 
+  correctField: (evidenceId: number, field: string, value: string) =>
+    apiRequest<ApiEvidenceItem>(`/api/evidence/${evidenceId}/correct`, {
+      method: 'PATCH',
+      body: JSON.stringify({ field, value }),
+    }),
+
   getFileUrl: (evidenceId: number) => `${API_BASE_URL}/api/evidence/${evidenceId}/file`,
 };
 
@@ -439,6 +452,77 @@ export const fingerprintApi = {
 
   getInstrumentHistory: (instrumentId: number) =>
     apiRequest<ApiFingerprintHistoryItem[]>(`/api/fingerprint/instrument/${instrumentId}/history`),
+};
+
+/* ---- Metrological Fingerprint — UVP 1 Instrument Identity API ---- */
+
+export interface FingerprintFeatureVector {
+  version: string;
+  error_curve: number[];
+  eccentricity_pattern: number[];
+  repeatability_std: number;
+  creep_profile: number[];
+}
+
+export interface FingerprintIdentityResult {
+  scenario_id?: string;
+  label?: string;
+  instrument_serial: string;
+  manufacturer: string;
+  model: string;
+  accuracy_class?: string;
+  enrolment_certificate?: string;
+  distance: number;
+  threshold: number;
+  result: 'MATCH' | 'BORDERLINE' | 'MISMATCH';
+  stored_hash: string;
+  current_hash: string;
+  stored_feature_vector: FingerprintFeatureVector;
+  current_feature_vector: FingerprintFeatureVector;
+  enrolled_at?: string | null;
+}
+
+export interface FingerprintEnrolResult {
+  session_id: number;
+  instrument_id: number;
+  instrument_serial: string;
+  manufacturer: string;
+  model: string;
+  ruleset_version: string;
+  measurement_count: number;
+  feature_vector: FingerprintFeatureVector;
+  fingerprint_hash: string;
+  hash_algorithm: string;
+  enrolled_at: string | null;
+}
+
+export interface FingerprintDemoScenarioSummary {
+  scenario_id: string;
+  label: string;
+  instrument_serial: string;
+}
+
+export interface FingerprintSubsetReading {
+  test_point: string;
+  reference_value: number;
+  indicated_value: number;
+}
+
+export const fingerprintIdentityApi = {
+  enrol: (sessionId: number) =>
+    apiRequest<FingerprintEnrolResult>(`/api/fingerprint/enrol/${sessionId}`, { method: 'POST' }),
+
+  verify: (instrumentSerial: string, readings: FingerprintSubsetReading[], threshold?: number) =>
+    apiRequest<FingerprintIdentityResult>(`/api/fingerprint/verify/${encodeURIComponent(instrumentSerial)}`, {
+      method: 'POST',
+      body: JSON.stringify({ readings, threshold }),
+    }),
+
+  listDemoScenarios: () =>
+    apiRequest<{ baseline_instrument: any; scenarios: FingerprintDemoScenarioSummary[] }>('/api/fingerprint/demo-scenarios'),
+
+  runDemoScenario: (scenarioId: 'genuine' | 'swapped') =>
+    apiRequest<FingerprintIdentityResult>(`/api/fingerprint/demo-scenarios/${scenarioId}/verify`, { method: 'POST' }),
 };
 
 /* ---- Digital Reports & Certificate API ---- */
@@ -658,7 +742,63 @@ export const softwareVerificationApi = {
     apiRequest<SoftwareVerificationData>(`/api/software-verification/session/${sessionId}`),
 };
 
+/* ---- Software Examination (UVP 2) — Live Demo Scenario API ---- */
 
+export interface SoftwareExamScenarioSummary {
+  scenario_id: string;
+  scenario_name: string;
+  interface: string;
+  declared_firmware: string;
+  declared_checksum: string;
+  command_count: number;
+}
+
+export interface SoftwareExamCommand {
+  test_id: string;
+  suite: string;
+  description: string;
+  command_sent: string;
+  response_received: string;
+  rule: string;
+  verdict: 'PASS' | 'FAIL';
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null;
+}
+
+export interface SoftwareExamRunResult {
+  scenario_id: string;
+  scenario_name: string;
+  interface: string;
+  declared_firmware: string;
+  declared_checksum: string;
+  commands: SoftwareExamCommand[];
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    overall_verdict: 'PASS' | 'FAIL';
+  };
+}
+
+export const softwareExamApi = {
+  listScenarios: () => apiRequest<SoftwareExamScenarioSummary[]>('/api/software-exam/scenarios'),
+  runScenario: (scenarioId: string) =>
+    apiRequest<SoftwareExamRunResult>(`/api/software-exam/run/${scenarioId}`, {
+      method: 'POST',
+    }),
+
+  // Not JSON — returns a PDF blob, so it bypasses the apiRequest() JSON helper.
+  downloadReportPdf: async (result: SoftwareExamRunResult): Promise<Blob> => {
+    const response = await fetch(`${API_BASE_URL}/api/software-exam/report/pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/pdf' },
+      body: JSON.stringify(result),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return response.blob();
+  },
+};
 
 /* ---- Sessions generate-code ---- */
 export const sessionsGenerateCode = (): Promise<{ session_code: string }> =>

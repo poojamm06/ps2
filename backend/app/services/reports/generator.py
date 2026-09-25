@@ -359,11 +359,16 @@ def build_verification_pdf(report_data: Dict[str, Any]) -> io.BytesIO:
             ]
         ]
         for ev in evidence_items:
+            ocr_note = f"{ev.get('ocr_status', 'N/A')} ({ev.get('ocr_confidence', 0)}% conf.)"
+            if ev.get("was_mock_extraction"):
+                ocr_note += " [Demo Mode]"
+            if ev.get("has_corrections"):
+                ocr_note += " — Manually Corrected"
             ev_data.append([
                 Paragraph(ev.get("evidence_type", "—").title(), table_cell),
                 Paragraph(ev.get("evidence_reference", "—"), mono_style),
                 Paragraph(ev.get("file_name", "—")[:25], table_cell),
-                Paragraph(f"{ev.get('ocr_status', 'N/A')} ({ev.get('ocr_confidence', 0)}% conf.)", table_cell),
+                Paragraph(ocr_note, table_cell),
                 Paragraph(f"<b>{ev.get('consistency_status', 'NOT_EVALUATED')}</b>", table_cell_bold),
             ])
         t_ev = Table(ev_data, colWidths=[90, 100, 110, 110, 110])
@@ -485,5 +490,209 @@ def build_verification_docx(report_data: Dict[str, Any]) -> io.BytesIO:
             row_cells[5].text = str(r.get("result", "PASS"))
 
     doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+# ============================================================================
+# UVP 2 — Software Examination Report (PDF)
+# ============================================================================
+
+SUITE_ORDER = ["PROTECTIVE_INTERFACE", "SOFTWARE_IDENTIFICATION", "AUDIT_TRAIL", "PROTOCOL_FUZZING"]
+SUITE_LABELS = {
+    "PROTECTIVE_INTERFACE": "Protective Interface Testing",
+    "SOFTWARE_IDENTIFICATION": "Software Identification & Integrity",
+    "AUDIT_TRAIL": "Audit Trail Integrity",
+    "PROTOCOL_FUZZING": "Protocol Fuzzing",
+}
+
+
+def build_software_exam_pdf(exam_data: Dict[str, Any]) -> io.BytesIO:
+    """
+    Builds a professional PDF report for a Software Examination (UVP 2) run —
+    scenario info, per-suite command/response/verdict tables, summary and
+    critical findings. Mirrors the styling of build_verification_pdf() above.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=44,
+        bottomMargin=44,
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle('SxTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=17, leading=21, textColor=colors.HexColor("#0F172A"), spaceAfter=4)
+    subtitle_style = ParagraphStyle('SxSub', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=13, textColor=colors.HexColor("#0284C7"), spaceAfter=10)
+    section_heading = ParagraphStyle('SxSecHead', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=colors.HexColor("#0F172A"), spaceBefore=12, spaceAfter=6)
+    body_text = ParagraphStyle('SxBody', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=12, textColor=colors.HexColor("#1E293B"))
+    table_cell = ParagraphStyle('SxCell', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=9.5, textColor=colors.HexColor("#0F172A"))
+    table_cell_fail = ParagraphStyle('SxCellFail', parent=table_cell, textColor=colors.HexColor("#991B1B"), fontName='Helvetica-Bold')
+    mono_cell = ParagraphStyle('SxMono', parent=styles['Normal'], fontName='Courier', fontSize=7, leading=9, textColor=colors.HexColor("#0F172A"))
+
+    elements = []
+
+    # Header
+    scenario_name = exam_data.get("scenario_name", "Software Examination")
+    interface = exam_data.get("interface", "")
+    firmware = exam_data.get("declared_firmware", "")
+    checksum = exam_data.get("declared_checksum", "")
+    generated_at = exam_data.get("generated_at") or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    header_data = [[
+        Paragraph("<b>NAWI TRUST — Software Examination Report</b><br/>OIML R76-1 Cl.5.5 &amp; WELMEC Guide 7.2", title_style),
+        Paragraph(f"<b>Generated:</b><br/>{generated_at}", table_cell),
+    ]]
+    t_head = Table(header_data, colWidths=[380, 140])
+    t_head.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+    elements.append(t_head)
+    elements.append(Spacer(1, 4))
+    elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284C7"), spaceAfter=10))
+
+    # Instrument / scenario info
+    info_data = [
+        [Paragraph("<b>Scenario</b>", table_cell), Paragraph(scenario_name, table_cell)],
+        [Paragraph("<b>Interface</b>", table_cell), Paragraph(interface, table_cell)],
+        [Paragraph("<b>Declared Firmware</b>", table_cell), Paragraph(firmware, table_cell)],
+        [Paragraph("<b>Declared Checksum</b>", table_cell), Paragraph(checksum, mono_cell)],
+    ]
+    t_info = Table(info_data, colWidths=[140, 380])
+    t_info.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(t_info)
+    elements.append(Spacer(1, 10))
+
+    # Per-suite tables
+    commands = exam_data.get("commands", [])
+    by_suite: Dict[str, list] = {}
+    for c in commands:
+        by_suite.setdefault(c.get("suite", "OTHER"), []).append(c)
+
+    for suite_key in SUITE_ORDER:
+        rows = by_suite.get(suite_key)
+        if not rows:
+            continue
+        elements.append(Paragraph(SUITE_LABELS.get(suite_key, suite_key), section_heading))
+
+        table_data = [[
+            Paragraph("<b>ID</b>", table_cell), Paragraph("<b>Description</b>", table_cell),
+            Paragraph("<b>Command</b>", table_cell), Paragraph("<b>Response</b>", table_cell),
+            Paragraph("<b>Rule</b>", table_cell), Paragraph("<b>Verdict</b>", table_cell), Paragraph("<b>Sev.</b>", table_cell),
+        ]]
+        row_styles = []
+        for idx, c in enumerate(rows, start=1):
+            is_fail = c.get("verdict") == "FAIL"
+            cell_style = table_cell_fail if is_fail else table_cell
+            table_data.append([
+                Paragraph(str(c.get("test_id", "")), cell_style),
+                Paragraph(str(c.get("description", "")), cell_style),
+                Paragraph(str(c.get("command_sent", "")), mono_cell),
+                Paragraph(str(c.get("response_received", "")), mono_cell if not is_fail else ParagraphStyle('m2', parent=mono_cell, textColor=colors.HexColor("#991B1B"))),
+                Paragraph(str(c.get("rule", "")), cell_style),
+                Paragraph(str(c.get("verdict", "")), cell_style),
+                Paragraph(str(c.get("severity") or "—"), cell_style),
+            ])
+            if is_fail:
+                row_styles.append(('BACKGROUND', (0, idx), (-1, idx), colors.HexColor("#FEE2E2")))
+
+        t = Table(table_data, colWidths=[30, 90, 80, 110, 95, 40, 35], repeatRows=1)
+        base_style = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#E2E8F0")),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ] + row_styles
+        t.setStyle(TableStyle(base_style))
+        elements.append(t)
+        elements.append(Spacer(1, 10))
+
+    # Summary
+    summary = exam_data.get("summary", {})
+    total = summary.get("total", len(commands))
+    passed = summary.get("passed", sum(1 for c in commands if c.get("verdict") == "PASS"))
+    failed = summary.get("failed", sum(1 for c in commands if c.get("verdict") == "FAIL"))
+    overall = summary.get("overall_verdict", "FAIL" if failed > 0 else "PASS")
+
+    verdict_bg = colors.HexColor("#059669") if overall == "PASS" else colors.HexColor("#DC2626")
+    verdict_style = ParagraphStyle('SxVerdict', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=13, leading=17, textColor=colors.white, alignment=1)
+    verdict_sub_style = ParagraphStyle('SxVerdictSub', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=12, textColor=colors.white, alignment=1)
+
+    t_banner = Table([[
+        Paragraph(f"SOFTWARE EXAMINATION: {overall}", verdict_style),
+    ], [
+        Paragraph(f"{total} tests completed — {passed} passed, {failed} failed", verdict_sub_style),
+    ]], colWidths=[520])
+    t_banner.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), verdict_bg),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('BOTTOMPADDING', (0, -1), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 2),
+    ]))
+    elements.append(t_banner)
+    elements.append(Spacer(1, 12))
+
+    # Critical findings
+    fail_rows = [c for c in commands if c.get("verdict") == "FAIL"]
+    if fail_rows:
+        elements.append(Paragraph("Critical Findings", section_heading))
+        cf_data = [[
+            Paragraph("<b>ID</b>", table_cell), Paragraph("<b>Description</b>", table_cell),
+            Paragraph("<b>Severity</b>", table_cell), Paragraph("<b>Reason</b>", table_cell),
+        ]]
+        for c in fail_rows:
+            cf_data.append([
+                Paragraph(str(c.get("test_id", "")), table_cell_fail),
+                Paragraph(str(c.get("description", "")), table_cell_fail),
+                Paragraph(str(c.get("severity") or "—"), table_cell_fail),
+                Paragraph(str(c.get("response_received", "")), table_cell_fail),
+            ])
+        t_cf = Table(cf_data, colWidths=[35, 130, 60, 275], repeatRows=1)
+        t_cf.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#FCA5A5")),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#FEE2E2")),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#FCA5A5")),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ]))
+        elements.append(t_cf)
+        elements.append(Spacer(1, 10))
+
+    elements.append(Spacer(1, 6))
+    elements.append(HRFlowable(width="100%", thickness=0.75, color=colors.HexColor("#CBD5E1"), spaceAfter=8))
+    elements.append(Paragraph(
+        "PROTOTYPE NOTICE: This is a prototype demonstration harness modeled on OIML R-76 Cl.5.5 / Annex G and "
+        "WELMEC Guide 7.2 methodology. It does not constitute actual WELMEC certification. Not for statutory use.",
+        body_text,
+    ))
+
+    class SxNumberedCanvas(NumberedCanvas):
+        def draw_page_decorations(self, page_count):
+            self.saveState()
+            self.setFont("Helvetica", 8)
+            self.setFillColor(colors.HexColor("#475569"))
+            self.drawString(40, 25, f"NAWI TRUST Platform | Software Examination Report | Page {self._pageNumber} of {page_count}")
+            self.drawRightString(A4[0] - 40, 25, "PROTOTYPE — NOT FOR STATUTORY USE")
+            self.setStrokeColor(colors.HexColor("#CBD5E1"))
+            self.setLineWidth(0.5)
+            self.line(40, A4[1] - 30, A4[0] - 40, A4[1] - 30)
+            self.drawString(40, A4[1] - 25, "SOFTWARE EXAMINATION REPORT — UVP 2")
+            self.drawRightString(A4[0] - 40, A4[1] - 25, "OIML R76-1 / WELMEC 7.2")
+            self.restoreState()
+
+    doc.build(elements, canvasmaker=SxNumberedCanvas)
     buffer.seek(0)
     return buffer

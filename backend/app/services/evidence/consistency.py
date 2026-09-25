@@ -185,6 +185,7 @@ def evaluate_evidence_consistency(
         detected_count += 1
         extracted_class = str(class_data["value"]).strip().upper()
         registered_class = str(instrument.accuracy_class).strip().upper()
+        registered_class = registered_class.replace("CLASS ", "").strip()
 
         # Map Roman numerals / digits
         class_map = {"1": "I", "2": "II", "3": "III", "4": "IIII", "IV": "IIII"}

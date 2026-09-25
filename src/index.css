@@ -4,7 +4,9 @@
 
 /* ================================================
    NAWI TRUST — Global Design System
-   Based on approved Stitch design (Material Design 3)
+   DigiLocker-inspired: indigo/violet primary,
+   lavender surfaces, soft status pills, generous
+   whitespace, rounded everything.
    ================================================ */
 
 @layer base {
@@ -16,8 +18,8 @@
 
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background-color: #f8f9ff;
-    color: #0b1c30;
+    background-color: #F6F5FF;
+    color: #1A1A2E;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -27,9 +29,9 @@
     width: 6px;
     height: 6px;
   }
-  ::-webkit-scrollbar-track { background: #eff4ff; }
-  ::-webkit-scrollbar-thumb { background: #c4c6cf; border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #74777f; }
+  ::-webkit-scrollbar-track { background: #F4F2FF; }
+  ::-webkit-scrollbar-thumb { background: #C7B8FF; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #8B8AA3; }
 
   /* Material Symbols base config */
   .material-symbols-outlined {
@@ -45,35 +47,35 @@
 
 @layer components {
   /* ------------------------------------------------
-     Typography Utilities (matching Stitch scale)
+     Typography Utilities
      ------------------------------------------------ */
   .font-display-lg {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 32px;
     line-height: 38px;
     letter-spacing: -0.02em;
     font-weight: 700;
   }
   .font-display-md {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 24px;
     line-height: 30px;
     letter-spacing: -0.015em;
-    font-weight: 600;
+    font-weight: 700;
   }
   .font-headline-lg {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 20px;
     line-height: 26px;
     letter-spacing: -0.01em;
-    font-weight: 600;
+    font-weight: 700;
   }
   .font-headline-sm {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 16px;
     line-height: 22px;
     letter-spacing: -0.005em;
-    font-weight: 600;
+    font-weight: 700;
   }
   .font-body-lg {
     font-family: 'Inter', sans-serif;
@@ -137,66 +139,66 @@
   }
 
   /* ------------------------------------------------
-     Status Badges (OIML Verdict)
+     Status Badges (OIML Verdict) — soft-filled pills
      ------------------------------------------------ */
   .badge-pass {
-    @apply inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold font-label-mono-sm tracking-wider;
-    background-color: #d1fae5;
-    color: #065f46;
-    border: 1px solid #6ee7b7;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold font-label-mono-sm tracking-wider;
+    background-color: #DCFCE7;
+    color: #15803D;
+    border: 1px solid #BBF7D0;
   }
   .badge-fail {
-    @apply inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold font-label-mono-sm tracking-wider;
-    background-color: #ffdad6;
-    color: #93000a;
-    border: 1px solid #ffb4ab;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold font-label-mono-sm tracking-wider;
+    background-color: #FEE2E2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
   }
   .badge-review {
-    @apply inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold font-label-mono-sm tracking-wider;
-    background-color: #fff3e0;
-    color: #e65100;
-    border: 1px solid #ffcc80;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold font-label-mono-sm tracking-wider;
+    background-color: #FEF3C7;
+    color: #B45309;
+    border: 1px solid #FDE68A;
   }
   .badge-testing {
-    @apply inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold font-label-mono-sm tracking-wider;
-    background-color: #e5eeff;
-    color: #314769;
-    border: 1px solid #c4c6cf;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold font-label-mono-sm tracking-wider;
+    background-color: #EEEBFF;
+    color: #4338CA;
+    border: 1px solid #DDD6FE;
   }
 
   /* ------------------------------------------------
-     OIML Accuracy Class Chips
+     OIML Accuracy Class Chips — lavender/indigo family
      ------------------------------------------------ */
   .oiml-class-i {
-    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
-    background: #eff4ff;
-    color: #314769;
-    border: 1px solid #93ccff;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #EEEBFF;
+    color: #4338CA;
+    border: 1px solid #DDD6FE;
   }
   .oiml-class-ii {
-    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
-    background: #cce5ff;
-    color: #001d31;
-    border: 1px solid #5bb8fe;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #E0D9FF;
+    color: #4A3AFF;
+    border: 1px solid #C7B8FF;
   }
   .oiml-class-iii {
-    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
-    background: #e5eeff;
-    color: #001026;
-    border: 1px solid #c4c6cf;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #F4F2FF;
+    color: #5A5A72;
+    border: 1px solid #E7E4F7;
   }
   .oiml-class-iv {
-    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
-    background: #d3e4fe;
-    color: #0b2545;
-    border: 1px solid #778db2;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #EDE9FE;
+    color: #6D28D9;
+    border: 1px solid #DDD6FE;
   }
 
   /* ------------------------------------------------
      Card Components
      ------------------------------------------------ */
   .nawi-card {
-    @apply bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20;
+    @apply bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40;
   }
   .nawi-card-inner {
     @apply bg-surface-container-low rounded-lg;
@@ -206,16 +208,16 @@
      Button Variants
      ------------------------------------------------ */
   .btn-primary {
-    @apply inline-flex items-center gap-1.5 px-space-md py-2 rounded-lg font-label-mono-sm text-label-mono-sm font-semibold text-on-primary bg-primary hover:bg-primary-container transition-colors shadow-sm;
+    @apply inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full font-body-md text-body-md font-semibold text-on-primary bg-primary hover:bg-[#3D2FE0] transition-colors shadow-sm;
   }
   .btn-secondary {
-    @apply inline-flex items-center gap-1.5 px-space-md py-2 rounded-lg font-label-mono-sm text-label-mono-sm font-semibold text-primary bg-surface-container hover:bg-surface-container-high transition-colors shadow-sm;
+    @apply inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full font-body-md text-body-md font-semibold text-primary bg-surface-container hover:bg-surface-container-high transition-colors;
   }
   .btn-outline {
-    @apply inline-flex items-center gap-1.5 px-space-md py-2 rounded-lg font-label-mono-sm text-label-mono-sm font-semibold text-secondary bg-surface-container-lowest border border-outline-variant hover:bg-surface-container-low transition-colors;
+    @apply inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full font-body-md text-body-md font-semibold text-primary bg-surface-container-lowest border border-outline-variant hover:bg-surface-container-low transition-colors;
   }
   .btn-ghost {
-    @apply inline-flex items-center gap-1.5 px-space-sm py-1.5 rounded font-label-mono-sm text-label-mono-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors;
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-body-md text-body-md font-medium text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors;
   }
 
   /* ------------------------------------------------
@@ -225,13 +227,13 @@
     @apply w-full text-body-md;
   }
   .nawi-table thead tr {
-    @apply bg-surface-container-low border-b border-outline-variant/40;
+    @apply bg-surface-container-low border-b border-outline-variant/60;
   }
   .nawi-table thead th {
     @apply px-3 py-2.5 text-left font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider font-semibold;
   }
   .nawi-table tbody tr {
-    @apply border-b border-outline-variant/20 hover:bg-surface-container-low transition-colors;
+    @apply border-b border-outline-variant/40 hover:bg-surface-container-low transition-colors;
   }
   .nawi-table tbody td {
     @apply px-3 py-2.5 text-on-surface;
@@ -241,7 +243,7 @@
      Form Inputs
      ------------------------------------------------ */
   .nawi-input {
-    @apply w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-body-md placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-1 focus:ring-secondary focus:border-secondary transition-colors;
+    @apply w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-surface-container-lowest text-on-surface text-body-md placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors;
   }
   .nawi-label {
     @apply block font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider font-semibold mb-1;
@@ -254,31 +256,200 @@
      Section / Page Layout
      ------------------------------------------------ */
   .page-section {
-    @apply bg-surface-container-lowest p-space-lg rounded-xl shadow-card space-y-space-md;
+    @apply bg-surface-container-lowest p-space-lg rounded-2xl shadow-card space-y-space-md;
   }
   .section-header-bar {
-    @apply w-2 h-5 bg-secondary rounded-sm flex-shrink-0;
+    @apply w-2 h-5 bg-primary rounded-sm flex-shrink-0;
+  }
+
+  /* Section title row with a "View all" indigo link on the right — the
+     signature DigiLocker list-section pattern. Usage:
+       <div class="section-heading-row">
+         <h3 class="section-heading-title">Recent Verifications</h3>
+         <a class="section-heading-link">View all</a>
+       </div> */
+  .section-heading-row {
+    @apply flex items-center justify-between gap-space-md mb-space-md;
+  }
+  .section-heading-title {
+    @apply font-headline-sm text-headline-lg text-on-surface font-bold;
+  }
+  .section-heading-link {
+    @apply inline-flex items-center gap-1 font-body-md text-body-md font-semibold text-primary hover:text-[#3D2FE0] cursor-pointer transition-colors flex-shrink-0;
+  }
+
+  /* ------------------------------------------------
+     DigiLocker-style Hero Banner (Dashboard)
+     ------------------------------------------------ */
+  .hero-banner {
+    @apply relative overflow-hidden rounded-2xl shadow-hero p-space-xl text-white;
+    background: linear-gradient(120deg, #5B4BFF 0%, #7C3AED 100%);
+  }
+  .hero-banner::before {
+    content: '';
+    position: absolute;
+    top: -60px;
+    right: -60px;
+    width: 220px;
+    height: 220px;
+    border-radius: 9999px;
+    background: rgba(255,255,255,0.08);
+  }
+  .hero-banner::after {
+    content: '';
+    position: absolute;
+    bottom: -80px;
+    right: 80px;
+    width: 160px;
+    height: 160px;
+    border-radius: 9999px;
+    background: rgba(255,255,255,0.06);
+  }
+  .hero-dot {
+    @apply w-1.5 h-1.5 rounded-full bg-white/35 transition-all;
+  }
+  .hero-dot.active {
+    @apply w-5 bg-white;
+  }
+
+  /* ------------------------------------------------
+     Quick-Action Tile (DigiLocker "Categories" tile)
+     ------------------------------------------------ */
+  .quick-tile {
+    @apply flex flex-col items-center justify-center gap-2 bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-md text-center cursor-pointer transition-all hover:shadow-card-hover hover:-translate-y-0.5;
+  }
+  .quick-tile-icon {
+    @apply w-11 h-11 rounded-full flex items-center justify-center bg-surface-container text-primary;
+  }
+
+  /* ------------------------------------------------
+     Document-Row Card (DigiLocker "Issued Documents" row)
+     ------------------------------------------------ */
+  .doc-row {
+    @apply flex items-center gap-space-md p-space-md rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer;
+  }
+  .doc-row-icon {
+    @apply w-10 h-10 rounded-full flex items-center justify-center bg-surface-container text-primary flex-shrink-0;
+  }
+
+  /* ------------------------------------------------
+     Rounded search bar w/ circular indigo button
+     ------------------------------------------------ */
+  .nawi-search-bar {
+    @apply flex items-center gap-2 bg-surface-container-lowest border border-outline-variant/60 rounded-full shadow-card pl-4 pr-1.5 py-1.5;
+  }
+  .nawi-search-input {
+    @apply flex-1 bg-transparent border-none outline-none font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/70 py-1.5;
+  }
+  .nawi-search-btn {
+    @apply w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0 hover:bg-[#3D2FE0] transition-colors;
+  }
+
+  /* KPI stat card */
+  .kpi-card {
+    @apply bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-md transition-shadow hover:shadow-card-hover;
   }
 
   /* ------------------------------------------------
      Anomaly Severity Chips
      ------------------------------------------------ */
   .severity-anomaly {
-    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
-    background: #ffdad6;
-    color: #93000a;
-    border: 1px solid #ffb4ab;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #FEE2E2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
   }
   .severity-attention {
-    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
-    background: #fff3e0;
-    color: #e65100;
-    border: 1px solid #ffcc80;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #FEF3C7;
+    color: #B45309;
+    border: 1px solid #FDE68A;
   }
   .severity-normal {
-    @apply inline-flex items-center px-2 py-0.5 rounded font-label-mono-sm text-label-mono-sm font-semibold;
-    background: #e5eeff;
-    color: #314769;
-    border: 1px solid #c4c6cf;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-semibold;
+    background: #EEEBFF;
+    color: #4338CA;
+    border: 1px solid #DDD6FE;
+  }
+
+  /* ------------------------------------------------
+     Software-Exam Severity Chips (UVP 2)
+     ------------------------------------------------ */
+  .sev-critical {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-bold tracking-wider;
+    background: #B91C1C;
+    color: #ffffff;
+    border: 1px solid #B91C1C;
+  }
+  .sev-high {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-bold tracking-wider;
+    background: #FEE2E2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
+  }
+  .sev-medium {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-bold tracking-wider;
+    background: #FEF3C7;
+    color: #B45309;
+    border: 1px solid #FDE68A;
+  }
+  .sev-low {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-bold tracking-wider;
+    background: #FEF9C3;
+    color: #854D0E;
+    border: 1px solid #FEF08A;
+  }
+  .sev-info {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-bold tracking-wider;
+    background: #EEEBFF;
+    color: #4338CA;
+    border: 1px solid #DDD6FE;
+  }
+  .sev-pass {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full font-label-mono-sm text-label-mono-sm font-bold tracking-wider;
+    background: #DCFCE7;
+    color: #15803D;
+    border: 1px solid #BBF7D0;
+  }
+
+  /* ------------------------------------------------
+     Console / Terminal Panel (UVP 2 live exam) — kept
+     dark, but wrapped in the shared white card + indigo
+     header treatment at the call site.
+     ------------------------------------------------ */
+  .exam-console {
+    background: #0b1220;
+    border-radius: 1rem;
+    box-shadow: 0 2px 10px rgba(74,58,255,0.10);
+    border: 1px solid #1c2740;
+  }
+  .exam-console-line {
+    font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    font-size: 12px;
+    line-height: 20px;
+    animation: exam-line-in 0.25s ease-out;
+  }
+  @keyframes exam-line-in {
+    from { opacity: 0; transform: translateY(-2px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-in-view {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in {
+    animation: fade-in-view 0.2s ease-out;
+  }
+
+  /* ------------------------------------------------
+     Skeleton loading blocks (palette-matched)
+     ------------------------------------------------ */
+  @keyframes skeleton-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .skeleton {
+    @apply bg-surface-container-high rounded-lg;
+    animation: skeleton-pulse 1.4s ease-in-out infinite;
   }
 }

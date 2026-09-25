@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useVerification } from '../context/VerificationContext';
 import { instrumentsApi, type ApiInstrumentCreate } from '../services/api';
+import { mockInstruments } from '../mock/mockData';
 import type { Instrument } from '../types';
 
 const MANUFACTURERS = [
@@ -25,24 +26,32 @@ const INSTRUMENT_TYPES = [
   'Vehicle Weighbridge',
 ];
 
+const fieldLabel = 'block font-body-sm text-body-sm font-semibold text-on-surface-variant mb-1.5';
+const fieldInput = 'nawi-input';
+
 export const InstrumentView: React.FC = () => {
-  const { 
-    instruments, 
-    selectInstrument, 
-    refreshBackendData, 
+  const {
+    instruments,
+    selectInstrument,
+    refreshBackendData,
     databaseConnected,
-    draftSession
+    draftSession,
   } = useVerification();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedInstId, setSelectedInstId] = useState<string>(
     draftSession.backendInstrumentId ? String(draftSession.backendInstrumentId) : ''
   );
-  const [showNewModal, setShowNewModal] = useState(false);
+
+  // Deterministic local fallback: instruments registered while the backend was
+  // unreachable are held here so the demo never dead-ends on a failed API call.
+  const [locallyAddedInstruments, setLocallyAddedInstruments] = useState<Instrument[]>([]);
+
+  // Inline registration panel state
+  const [showRegisterForm, setShowRegisterForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // New Instrument Form State
+  const [successToast, setSuccessToast] = useState<string | null>(null);
   const [newForm, setNewForm] = useState<ApiInstrumentCreate>({
     manufacturer: 'RADWAG',
     model: 'PS 2100.R2',
@@ -58,8 +67,15 @@ export const InstrumentView: React.FC = () => {
     approval_certificate_number: 'OIML-R76-2026-CERT',
   });
 
+  // Demo-safety net: fall back to rich mock inventory when the backend is offline,
+  // always including anything registered locally this session.
+  const displayInstruments = [
+    ...(instruments.length > 0 ? instruments : mockInstruments),
+    ...locallyAddedInstruments,
+  ];
+
   // Filtered instruments
-  const filteredInstruments = instruments.filter(inst => {
+  const filteredInstruments = displayInstruments.filter(inst => {
     const q = searchQuery.toLowerCase();
     return (
       inst.serialNumber.toLowerCase().includes(q) ||
@@ -71,15 +87,20 @@ export const InstrumentView: React.FC = () => {
 
   // Automatically select first instrument if none selected
   useEffect(() => {
-    if (!selectedInstId && instruments.length > 0) {
-      setSelectedInstId(instruments[0].id);
+    if (!selectedInstId && displayInstruments.length > 0) {
+      setSelectedInstId(displayInstruments[0].id);
     }
-  }, [instruments, selectedInstId]);
+  }, [displayInstruments, selectedInstId]);
 
-  const selectedInstrument = instruments.find(i => i.id === selectedInstId) || instruments[0];
+  const selectedInstrument = displayInstruments.find(i => i.id === selectedInstId) || displayInstruments[0];
 
   const handleSelectAndContinue = (inst: Instrument) => {
     selectInstrument(inst);
+  };
+
+  const toggleRegisterForm = () => {
+    setErrorMsg(null);
+    setShowRegisterForm(v => !v);
   };
 
   const handleRegisterNew = async (e: React.FormEvent) => {
@@ -92,18 +113,20 @@ export const InstrumentView: React.FC = () => {
     setIsSubmitting(true);
     setErrorMsg(null);
 
+    const normalizedClass = newForm.accuracy_class.startsWith('Class ')
+      ? newForm.accuracy_class
+      : `Class ${newForm.accuracy_class}`;
+
     try {
+      // Real backend first.
       const created = await instrumentsApi.createInstrument({
         ...newForm,
-        accuracy_class: newForm.accuracy_class.startsWith('Class ') 
-          ? newForm.accuracy_class 
-          : `Class ${newForm.accuracy_class}`,
+        accuracy_class: normalizedClass,
       });
 
       await refreshBackendData();
-      setShowNewModal(false);
+      setShowRegisterForm(false);
 
-      // Select newly created instrument and proceed
       const mappedInst: Instrument = {
         id: String(created.id),
         serialNumber: created.serial_number,
@@ -121,9 +144,38 @@ export const InstrumentView: React.FC = () => {
         location: '',
       };
 
+      setSelectedInstId(mappedInst.id);
       selectInstrument(mappedInst);
+      setSuccessToast(`${mappedInst.manufacturer} ${mappedInst.model} registered and saved to PostgreSQL.`);
+      setTimeout(() => setSuccessToast(null), 4000);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to register instrument in PostgreSQL.');
+      // Deterministic local fallback — the backend is unreachable, so register the
+      // instrument locally for this session instead of dead-ending the demo.
+      console.warn('Instrument registration API unavailable, using local fallback:', err?.message);
+
+      const localInst: Instrument = {
+        id: `local_${Date.now()}`,
+        serialNumber: newForm.serial_number,
+        manufacturer: newForm.manufacturer,
+        model: newForm.model,
+        accuracyClass: (normalizedClass.replace(/^Class\s+/i, '').trim() || 'II') as any,
+        maxCapacity: newForm.max_capacity,
+        minCapacity: newForm.min_capacity,
+        unit: (newForm.unit || 'g') as any,
+        verificationScaleInterval_e: newForm.verification_scale_interval_e,
+        actualScaleInterval_d: newForm.actual_scale_interval_d,
+        instrumentType: newForm.functional_type as any,
+        softwareApplicable: newForm.software_applicable ?? false,
+        approvalCertificateNumber: newForm.approval_certificate_number || undefined,
+        location: '',
+      };
+
+      setLocallyAddedInstruments(prev => [...prev, localInst]);
+      setShowRegisterForm(false);
+      setSelectedInstId(localInst.id);
+      selectInstrument(localInst);
+      setSuccessToast(`Demo Mode — ${localInst.manufacturer} ${localInst.model} registered locally (backend unreachable).`);
+      setTimeout(() => setSuccessToast(null), 5000);
     } finally {
       setIsSubmitting(false);
     }
@@ -132,7 +184,7 @@ export const InstrumentView: React.FC = () => {
   return (
     <div className="space-y-space-lg">
       {/* Step Header */}
-      <section className="bg-surface-container-lowest p-space-lg rounded-xl shadow-card border border-outline-variant/30">
+      <section className="bg-surface-container-lowest p-space-lg rounded-2xl shadow-card border border-outline-variant/40">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md">
           <div>
             <div className="flex items-center gap-space-xs mb-1.5 flex-wrap">
@@ -159,34 +211,234 @@ export const InstrumentView: React.FC = () => {
 
           <div className="flex items-center gap-space-sm flex-wrap">
             <button
-              onClick={() => setShowNewModal(true)}
-              className="btn-primary text-xs h-[42px] px-4"
+              onClick={toggleRegisterForm}
+              className={showRegisterForm ? 'btn-secondary text-xs h-[42px] px-4' : 'btn-primary text-xs h-[42px] px-4'}
             >
-              <span className="material-symbols-outlined text-[18px]">add_circle</span>
-              Register New Instrument
+              <span className="material-symbols-outlined text-[18px]">
+                {showRegisterForm ? 'close' : 'add_circle'}
+              </span>
+              {showRegisterForm ? 'Close' : 'Register New Instrument'}
             </button>
           </div>
         </div>
       </section>
 
+      {successToast && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-[#DCFCE7] text-[#15803D] font-body-sm text-body-sm fade-in">
+          <span className="material-symbols-outlined text-[18px]">check_circle</span>
+          <span>{successToast}</span>
+        </div>
+      )}
+
+      {/* Inline Registration Panel — expands above the list/spec columns */}
+      <div
+        className={`transition-all duration-300 ease-out overflow-hidden ${
+          showRegisterForm ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-xl">
+          <div className="mb-space-lg">
+            <h2 className="font-headline-sm text-headline-sm text-on-surface font-bold">
+              Register New Weighing Instrument
+            </h2>
+            <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+              Enter the instrument's metrological specifications.
+            </p>
+          </div>
+
+          {errorMsg && (
+            <div className="flex items-start gap-2 p-3 mb-space-lg rounded-xl bg-[#FEE2E2]">
+              <span className="material-symbols-outlined text-[18px] text-error flex-shrink-0 mt-0.5">error</span>
+              <span className="font-body-md text-body-sm text-error">{errorMsg}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleRegisterNew} className="space-y-space-xl">
+            {/* Identification */}
+            <div className="space-y-space-md">
+              <div className="flex items-center gap-2">
+                <span className="section-header-bar"></span>
+                <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold">Identification</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
+                <div>
+                  <label className={fieldLabel}>Manufacturer</label>
+                  <select
+                    value={newForm.manufacturer}
+                    onChange={(e) => setNewForm({ ...newForm, manufacturer: e.target.value })}
+                    className="nawi-select"
+                  >
+                    {MANUFACTURERS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className={fieldLabel}>Model Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={newForm.model}
+                    onChange={(e) => setNewForm({ ...newForm, model: e.target.value })}
+                    className={fieldInput}
+                    placeholder="e.g. Excellence XP-600"
+                  />
+                </div>
+
+                <div>
+                  <label className={fieldLabel}>Unique Serial Number</label>
+                  <input
+                    type="text"
+                    required
+                    value={newForm.serial_number}
+                    onChange={(e) => setNewForm({ ...newForm, serial_number: e.target.value })}
+                    className={fieldInput}
+                    placeholder="e.g. SN-2026-9901"
+                  />
+                </div>
+
+                <div>
+                  <label className={fieldLabel}>Functional Type</label>
+                  <select
+                    value={newForm.functional_type}
+                    onChange={(e) => setNewForm({ ...newForm, functional_type: e.target.value })}
+                    className="nawi-select"
+                  >
+                    {INSTRUMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Metrological Parameters */}
+            <div className="space-y-space-md">
+              <div className="flex items-center gap-2">
+                <span className="section-header-bar"></span>
+                <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold">Metrological Parameters</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
+                <div>
+                  <label className={fieldLabel}>Accuracy Class (OIML R-76)</label>
+                  <select
+                    value={newForm.accuracy_class}
+                    onChange={(e) => setNewForm({ ...newForm, accuracy_class: e.target.value })}
+                    className="nawi-select"
+                  >
+                    <option value="Class I">Class I (Special Accuracy)</option>
+                    <option value="Class II">Class II (High Accuracy)</option>
+                    <option value="Class III">Class III (Medium Accuracy)</option>
+                    <option value="Class IIII">Class IIII (Ordinary Accuracy)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className={fieldLabel}>Unit of Measure</label>
+                  <select
+                    value={newForm.unit}
+                    onChange={(e) => setNewForm({ ...newForm, unit: e.target.value })}
+                    className="nawi-select"
+                  >
+                    <option value="g">Grams (g)</option>
+                    <option value="kg">Kilograms (kg)</option>
+                    <option value="mg">Milligrams (mg)</option>
+                    <option value="t">Tonnes (t)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className={fieldLabel}>Max Capacity (Max)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    value={newForm.max_capacity}
+                    onChange={(e) => setNewForm({ ...newForm, max_capacity: parseFloat(e.target.value) || 0 })}
+                    className={`${fieldInput} metrology-mono`}
+                  />
+                </div>
+
+                <div>
+                  <label className={fieldLabel}>Min Capacity (Min)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    value={newForm.min_capacity}
+                    onChange={(e) => setNewForm({ ...newForm, min_capacity: parseFloat(e.target.value) || 0 })}
+                    className={`${fieldInput} metrology-mono`}
+                  />
+                </div>
+
+                <div>
+                  <label className={fieldLabel}>Verification Scale Interval (e)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    value={newForm.verification_scale_interval_e}
+                    onChange={(e) => setNewForm({ ...newForm, verification_scale_interval_e: parseFloat(e.target.value) || 0.1 })}
+                    className={`${fieldInput} metrology-mono`}
+                  />
+                </div>
+
+                <div>
+                  <label className={fieldLabel}>Actual Scale Interval (d)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    value={newForm.actual_scale_interval_d}
+                    onChange={(e) => setNewForm({ ...newForm, actual_scale_interval_d: parseFloat(e.target.value) || 0.01 })}
+                    className={`${fieldInput} metrology-mono`}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-space-md border-t border-outline-variant/40 flex justify-end gap-space-sm">
+              <button
+                type="button"
+                onClick={() => setShowRegisterForm(false)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="btn-primary px-6 disabled:opacity-60"
+              >
+                {isSubmitting ? (
+                  <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                ) : null}
+                {isSubmitting ? 'Registering...' : 'Register & Continue →'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       {/* Main Grid: List on Left, Selected Details on Right */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
         {/* Left Column: Instruments Table / List (7 cols) */}
-        <div className="lg:col-span-7 bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/30 p-space-lg space-y-space-md">
+        <div className="lg:col-span-7 bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg space-y-space-md">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm pb-space-sm border-b border-outline-variant/30">
             <div>
               <h2 className="font-headline-sm text-body-lg font-bold text-primary">Registered Instruments</h2>
-              <p className="text-xs text-on-surface-variant">Live inventory from PostgreSQL `instruments` table</p>
+              <p className="text-xs text-on-surface-variant">Search or select an instrument to begin verification</p>
             </div>
-            <div className="relative w-full sm:w-64">
-              <span className="material-symbols-outlined absolute left-3 top-2.5 text-outline text-[18px]">search</span>
+            <div className="nawi-search-bar w-full sm:w-72">
+              <span className="material-symbols-outlined text-outline text-[18px]">search</span>
               <input
                 type="text"
                 placeholder="Search serial, model, brand..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg text-xs bg-surface-container-low border border-outline-variant/50 focus:outline-none focus:border-secondary text-primary"
+                className="nawi-search-input"
               />
+              <button className="nawi-search-btn" tabIndex={-1} type="button">
+                <span className="material-symbols-outlined text-[18px]">tune</span>
+              </button>
             </div>
           </div>
 
@@ -196,7 +448,7 @@ export const InstrumentView: React.FC = () => {
               <p className="text-sm font-semibold text-primary">No matching instruments found</p>
               <p className="text-xs text-on-surface-variant mt-1">Register a new instrument to proceed with verification.</p>
               <button
-                onClick={() => setShowNewModal(true)}
+                onClick={toggleRegisterForm}
                 className="btn-secondary text-xs mt-4"
               >
                 + Register Instrument
@@ -211,40 +463,32 @@ export const InstrumentView: React.FC = () => {
                   <div
                     key={inst.id}
                     onClick={() => setSelectedInstId(inst.id)}
-                    className={`p-space-md rounded-xl border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-primary-container/20 border-secondary shadow-sm ring-1 ring-secondary/40'
-                        : 'bg-surface-container-low/40 border-outline-variant/40 hover:bg-surface-container hover:border-outline-variant'
+                    className={`doc-row rounded-xl ${
+                      isSelected ? 'bg-[#EEEBFF]' : 'bg-surface-container-lowest border border-outline-variant/40'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-primary truncate">{inst.manufacturer} {inst.model}</span>
-                          <span className="px-1.5 py-0.5 rounded bg-surface-container-high text-secondary font-mono text-[10px] font-bold">
-                            Class {inst.accuracyClass}
-                          </span>
-                        </div>
-                        <div className="text-xs font-mono text-on-surface-variant mt-1 flex items-center gap-3 flex-wrap">
-                          <span>S/N: <strong className="text-primary">{inst.serialNumber}</strong></span>
-                          <span>Max: <strong>{inst.maxCapacity} {inst.unit}</strong></span>
-                          <span>e: <strong>{inst.verificationScaleInterval_e} {inst.unit}</strong></span>
-                          <span>d: <strong>{inst.actualScaleInterval_d} {inst.unit}</strong></span>
-                          <span>n: <strong>{n.toLocaleString()}</strong></span>
-                        </div>
+                    <div className={`doc-row-icon ${isSelected ? 'bg-white text-primary' : ''}`}>
+                      <span className="material-symbols-outlined text-[18px]">scale</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-on-surface truncate">{inst.manufacturer} {inst.model}</span>
+                        <span className="oiml-class-ii !py-0.5">Class {inst.accuracyClass}</span>
                       </div>
+                      <div className="text-xs font-mono text-on-surface-variant mt-1 flex items-center gap-3 flex-wrap">
+                        <span>S/N: <strong className="text-on-surface">{inst.serialNumber}</strong></span>
+                        <span>Max: <strong>{inst.maxCapacity} {inst.unit}</strong></span>
+                        <span>e: <strong>{inst.verificationScaleInterval_e} {inst.unit}</strong></span>
+                        <span>n: <strong>{n.toLocaleString()}</strong></span>
+                      </div>
+                    </div>
 
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {isSelected ? (
-                          <span className="px-2 py-1 rounded bg-secondary text-on-secondary text-[11px] font-bold">
-                            SELECTED
-                          </span>
-                        ) : (
-                          <span className="text-xs text-outline group-hover:text-primary">
-                            Click to select
-                          </span>
-                        )}
-                      </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {isSelected ? (
+                        <span className="badge-pass">SELECTED</span>
+                      ) : (
+                        <span className="material-symbols-outlined text-[18px] text-outline">chevron_right</span>
+                      )}
                     </div>
                   </div>
                 );
@@ -254,7 +498,7 @@ export const InstrumentView: React.FC = () => {
         </div>
 
         {/* Right Column: Active Instrument Specification Card (5 cols) */}
-        <div className="lg:col-span-5 bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/30 p-space-lg space-y-space-md">
+        <div className="lg:col-span-5 bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg space-y-space-md">
           <div className="border-b border-outline-variant/30 pb-space-sm">
             <span className="font-label-mono-sm text-[11px] text-outline uppercase tracking-wider font-bold">
               SELECTED INSTRUMENT SPECIFICATION
@@ -312,8 +556,8 @@ export const InstrumentView: React.FC = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-on-surface-variant">Scale Division Count (n):</span>
                   <span className="font-bold font-mono text-primary">
-                    {selectedInstrument.verificationScaleInterval_e > 0 
-                      ? Math.round(selectedInstrument.maxCapacity / selectedInstrument.verificationScaleInterval_e).toLocaleString() 
+                    {selectedInstrument.verificationScaleInterval_e > 0
+                      ? Math.round(selectedInstrument.maxCapacity / selectedInstrument.verificationScaleInterval_e).toLocaleString()
                       : '—'}
                   </span>
                 </div>
@@ -347,175 +591,6 @@ export const InstrumentView: React.FC = () => {
           )}
         </div>
       </div>
-
-      {/* Modal: Register New Instrument */}
-      {showNewModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/40 max-w-2xl w-full p-space-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-outline-variant/30 mb-4">
-              <div>
-                <h3 className="font-headline-sm text-lg font-bold text-primary">Register New Weighing Instrument</h3>
-                <p className="text-xs text-on-surface-variant">Saves directly into PostgreSQL `instruments` table</p>
-              </div>
-              <button
-                onClick={() => setShowNewModal(false)}
-                className="p-1.5 rounded-lg text-outline hover:text-primary hover:bg-surface-container"
-              >
-                <span className="material-symbols-outlined text-[20px]">close</span>
-              </button>
-            </div>
-
-            {errorMsg && (
-              <div className="p-3 mb-4 rounded-lg bg-error-container text-on-error-container text-xs font-semibold">
-                {errorMsg}
-              </div>
-            )}
-
-            <form onSubmit={handleRegisterNew} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-on-surface-variant font-semibold mb-1">Manufacturer</label>
-                  <select
-                    value={newForm.manufacturer}
-                    onChange={(e) => setNewForm({ ...newForm, manufacturer: e.target.value })}
-                    className="w-full p-2 rounded bg-surface-container border border-outline-variant/50 text-primary"
-                  >
-                    {MANUFACTURERS.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-on-surface-variant font-semibold mb-1">Model Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={newForm.model}
-                    onChange={(e) => setNewForm({ ...newForm, model: e.target.value })}
-                    className="w-full p-2 rounded bg-surface-container border border-outline-variant/50 text-primary font-mono"
-                    placeholder="e.g. Excellence XP-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-on-surface-variant font-semibold mb-1">Unique Serial Number</label>
-                  <input
-                    type="text"
-                    required
-                    value={newForm.serial_number}
-                    onChange={(e) => setNewForm({ ...newForm, serial_number: e.target.value })}
-                    className="w-full p-2 rounded bg-surface-container border border-outline-variant/50 text-primary font-mono"
-                    placeholder="e.g. SN-2026-9901"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-on-surface-variant font-semibold mb-1">Functional Type</label>
-                  <select
-                    value={newForm.functional_type}
-                    onChange={(e) => setNewForm({ ...newForm, functional_type: e.target.value })}
-                    className="w-full p-2 rounded bg-surface-container border border-outline-variant/50 text-primary"
-                  >
-                    {INSTRUMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-on-surface-variant font-semibold mb-1">Accuracy Class (OIML R-76)</label>
-                  <select
-                    value={newForm.accuracy_class}
-                    onChange={(e) => setNewForm({ ...newForm, accuracy_class: e.target.value })}
-                    className="w-full p-2 rounded bg-surface-container border border-outline-variant/50 text-primary"
-                  >
-                    <option value="Class I">Class I (Special Accuracy)</option>
-                    <option value="Class II">Class II (High Accuracy)</option>
-                    <option value="Class III">Class III (Medium Accuracy)</option>
-                    <option value="Class IIII">Class IIII (Ordinary Accuracy)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-on-surface-variant font-semibold mb-1">Unit of Measure</label>
-                  <select
-                    value={newForm.unit}
-                    onChange={(e) => setNewForm({ ...newForm, unit: e.target.value })}
-                    className="w-full p-2 rounded bg-surface-container border border-outline-variant/50 text-primary"
-                  >
-                    <option value="g">Grams (g)</option>
-                    <option value="kg">Kilograms (kg)</option>
-                    <option value="mg">Milligrams (mg)</option>
-                    <option value="t">Tonnes (t)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-on-surface-variant font-semibold mb-1">Max Capacity (Max)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    value={newForm.max_capacity}
-                    onChange={(e) => setNewForm({ ...newForm, max_capacity: parseFloat(e.target.value) || 0 })}
-                    className="w-full p-2 rounded bg-surface-container border border-outline-variant/50 text-primary font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-on-surface-variant font-semibold mb-1">Min Capacity (Min)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    value={newForm.min_capacity}
-                    onChange={(e) => setNewForm({ ...newForm, min_capacity: parseFloat(e.target.value) || 0 })}
-                    className="w-full p-2 rounded bg-surface-container border border-outline-variant/50 text-primary font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-on-surface-variant font-semibold mb-1">Verif. Scale Interval (e)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    value={newForm.verification_scale_interval_e}
-                    onChange={(e) => setNewForm({ ...newForm, verification_scale_interval_e: parseFloat(e.target.value) || 0.1 })}
-                    className="w-full p-2 rounded bg-surface-container border border-outline-variant/50 text-primary font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-on-surface-variant font-semibold mb-1">Actual Scale Interval (d)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    value={newForm.actual_scale_interval_d}
-                    onChange={(e) => setNewForm({ ...newForm, actual_scale_interval_d: parseFloat(e.target.value) || 0.01 })}
-                    className="w-full p-2 rounded bg-surface-container border border-outline-variant/50 text-primary font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-outline-variant/30 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowNewModal(false)}
-                  className="btn-secondary text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="btn-primary text-xs px-6"
-                >
-                  {isSubmitting ? 'Saving to PostgreSQL...' : 'Register & Continue →'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

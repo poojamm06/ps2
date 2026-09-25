@@ -4,6 +4,7 @@ import { ObservationGrid } from '../components/ObservationGrid';
 import { readingsApi } from '../services/api';
 import type { StaticWeighingPoint } from '../types';
 import { defaultDemoStaticPoints } from '../context/VerificationContext';
+import { getMpeForLoad } from '../utils/oimlMpe';
 
 interface DataAcquisitionViewProps {
   onBack?: () => void;
@@ -221,13 +222,13 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
         const key = `${refVal}_${indVal}`;
 
         if (!existingRefLoads.has(key)) {
-          // Calculate MPE roughly or pass 0 for statutory calculation in backend
+          const mpeResult = getMpeForLoad(refVal, e, accuracyClass, unit);
           await readingsApi.createReading({
             session_id: sid,
             test_point: `Weighing Performance (${refVal} ${unit})`,
             reference_value: refVal,
             indicated_value: indVal,
-            mpe: 0, // backend automatically computes Table 6 statutory MPE
+            mpe: mpeResult.limitValue,
             unit: unit,
           });
           savedCount++;
@@ -340,7 +341,7 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
       )}
 
       {/* 1. Context Summary Header */}
-      <section className="bg-surface-container-lowest p-space-lg rounded-xl shadow-card border border-outline-variant/20">
+      <section className="bg-surface-container-lowest p-space-lg rounded-2xl shadow-card border border-outline-variant/40">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-space-md">
           <div>
             <div className="flex flex-wrap items-center gap-space-xs mb-1.5">
@@ -429,7 +430,7 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
         {/* Left / Center: Observation Grid (8 or 9 cols) */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-space-sm">
           {/* Table Toolbar */}
-          <div className="bg-surface-container-lowest p-space-sm rounded-xl shadow-card border border-outline-variant/20 flex flex-wrap items-center justify-between gap-space-sm">
+          <div className="bg-surface-container-lowest p-space-sm rounded-2xl shadow-card border border-outline-variant/40 flex flex-wrap items-center justify-between gap-space-sm">
             <div className="flex items-center gap-space-sm flex-wrap">
               <span className="font-label-mono-sm text-xs text-outline uppercase font-semibold pl-2">
                 TEST DIRECTION:
@@ -490,7 +491,7 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
           </div>
 
           {/* TanStack Observation Grid */}
-          <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 overflow-hidden">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 overflow-hidden">
             <ObservationGrid
               points={points}
               unit={unit}
@@ -508,7 +509,7 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
         {/* Right Sidebar: Context Cards (4 or 3 cols) */}
         <div className="lg:col-span-4 xl:col-span-3 space-y-space-md">
           {/* Card 1: Session Progress Summary */}
-          <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-md space-y-space-sm">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-md space-y-space-sm">
             <div className="flex items-center justify-between border-b border-outline-variant/30 pb-2">
               <span className="font-label-mono-sm text-[11px] text-outline uppercase tracking-wider">OBSERVATION METRICS</span>
               <span className="material-symbols-outlined text-[18px] text-primary">speed</span>
@@ -551,7 +552,7 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
           </div>
 
           {/* Card 2: OIML R-76 Statutory Formulas Reference */}
-          <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-md space-y-space-sm">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-md space-y-space-sm">
             <div className="flex items-center justify-between border-b border-outline-variant/30 pb-2">
               <span className="font-label-mono-sm text-[11px] text-outline uppercase tracking-wider">OIML R-76 FORMULAS</span>
               <span className="material-symbols-outlined text-[18px] text-primary">functions</span>
@@ -576,7 +577,7 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
           </div>
 
           {/* Card 3: Class MPE Step Limits */}
-          <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-md space-y-2">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-md space-y-2">
             <div className="font-label-mono-sm text-[11px] text-outline uppercase tracking-wider border-b border-outline-variant/30 pb-2">
               MPE TABLE 6 (CLASS {accuracyClass})
             </div>
@@ -599,7 +600,7 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
       </div>
 
       {/* Bottom Action Footer */}
-      <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-card border border-outline-variant/20 flex flex-col sm:flex-row sm:items-center justify-between gap-space-md">
+      <div className="bg-surface-container-lowest p-space-md rounded-2xl shadow-card border border-outline-variant/40 flex flex-col sm:flex-row sm:items-center justify-between gap-space-md">
         <button
           type="button"
           onClick={handleGoBack}

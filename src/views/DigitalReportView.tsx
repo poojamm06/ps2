@@ -62,6 +62,7 @@ export const DigitalReportView: React.FC = () => {
   const isFail = verdict === 'FAIL';
   const isReview = verdict === 'REVIEW';
   const readings = reportData?.readings || [];
+  const evidenceItems = reportData?.evidence_items || [];
 
   return (
     <>
@@ -237,6 +238,49 @@ export const DigitalReportView: React.FC = () => {
                             <span className="badge-pass text-[10px]">PASS</span>
                           ) : (
                             <span className="badge-fail text-[10px]">FAIL</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Supporting Evidence Summary */}
+          {evidenceItems.length > 0 && (
+            <div className="p-space-md rounded-lg bg-surface-container-low border border-outline-variant/20">
+              <div className="font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider font-semibold mb-space-sm">
+                PHYSICAL &amp; VISUAL EVIDENCE SUMMARY ({evidenceItems.length} ITEMS)
+              </div>
+              <div className="overflow-x-auto">
+                <table className="nawi-table w-full text-[12px]">
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th>Reference</th>
+                      <th>OCR Extraction</th>
+                      <th>Consistency</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {evidenceItems.map((ev: any) => (
+                      <tr key={ev.id}>
+                        <td className="font-semibold text-primary capitalize">{ev.evidence_type}</td>
+                        <td className="metrology-mono">{ev.evidence_reference || '—'}</td>
+                        <td>
+                          {ev.ocr_status} ({ev.ocr_confidence ?? 0}% conf.)
+                          {ev.was_mock_extraction && <span className="ml-1 badge-testing text-[9px]">Demo Mode</span>}
+                          {ev.has_corrections && <span className="ml-1 badge-testing text-[9px]">Corrected</span>}
+                        </td>
+                        <td>
+                          {ev.consistency_status === 'MATCH' ? (
+                            <span className="badge-pass text-[10px]">MATCH</span>
+                          ) : ev.consistency_status === 'MISMATCH' ? (
+                            <span className="badge-fail text-[10px]">MISMATCH</span>
+                          ) : (
+                            <span className="badge-review text-[10px]">{ev.consistency_status}</span>
                           )}
                         </td>
                       </tr>

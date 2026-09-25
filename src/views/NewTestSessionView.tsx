@@ -76,12 +76,6 @@ export const NewTestSessionView: React.FC = () => {
     proceedToStep(prev);
   };
 
-  const handleForward = () => {
-    const next = Math.min(5, currentStep + 1);
-    setCurrentStep(next);
-    proceedToStep(next);
-  };
-
   const renderStepContent = () => {
     switch (currentStep) {
       case 2:
@@ -106,72 +100,43 @@ export const NewTestSessionView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-space-md">
+    <div className="space-y-space-lg">
       {/* Workflow Header */}
-      <section className="bg-surface-container-lowest p-space-lg rounded-xl shadow-card border border-outline-variant/20">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-md">
-          <div>
-            <div className="flex flex-wrap items-center gap-space-xs mb-1">
-              <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary font-label-mono-sm text-[11px] font-semibold uppercase tracking-wider">
-                OIML R-76-1:2006 (E)
-              </span>
-              <span className="px-2 py-0.5 rounded bg-secondary-fixed text-on-secondary-fixed font-label-mono-sm text-[11px] font-semibold uppercase">
-                SESSION: {draftSession.sessionId || 'APP-2026-0899'}
-              </span>
-              <span className="px-2 py-0.5 rounded bg-surface-container-high text-secondary font-label-mono-sm text-[11px] font-bold uppercase">
-                CLASS {draftSession.accuracyClass || 'II'}
-              </span>
-              <span className="px-2 py-0.5 rounded bg-primary/10 text-primary font-label-mono-sm text-[11px] font-bold uppercase">
-                PHASE-1 CORE PROTOTYPE
-              </span>
-            </div>
-            <h1 className="font-display-md text-display-md text-primary tracking-tight font-bold">
-              NAWI Verification Workflow
-            </h1>
-            <p className="font-body-md text-body-md text-on-surface-variant mt-0.5">
-              OIML R-76-Based Verification Workflow — Instrument Evaluation &amp; Laboratory Context
-            </p>
+      <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-md">
+        <div>
+          <div className="flex flex-wrap items-center gap-space-xs mb-1.5">
+            <span className="badge-testing">Session {draftSession.sessionId || 'APP-2026-0899'}</span>
+            <span className="oiml-class-ii !py-1">Class {draftSession.accuracyClass || 'II'}</span>
           </div>
-
-          <div className="flex items-center gap-space-sm flex-wrap">
-            <button 
-              type="button" 
-              onClick={() => {
-                createNewSession();
-                setCurrentStep(1);
-              }} 
-              className="btn-secondary text-xs"
-            >
-              <span className="material-symbols-outlined text-[15px]">add_circle</span>
-              + New Session
-            </button>
-            {currentStep > 1 && (
-              <button type="button" onClick={handleBack} className="btn-secondary text-xs">
-                <span className="material-symbols-outlined text-[15px]">arrow_back</span>
-                Previous Step
-              </button>
-            )}
-            {currentStep < 5 && currentStep > 1 && (
-              <button type="button" onClick={handleForward} className="btn-primary text-xs">
-                Step {currentStep + 1}
-                <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
-              </button>
-            )}
-          </div>
+          <h1 className="font-display-md text-display-md text-on-surface tracking-tight font-bold">
+            NAWI Verification Workflow
+          </h1>
+          <p className="font-body-md text-body-md text-on-surface-variant mt-0.5">
+            Instrument evaluation, observation entry, compliance and certificate — in one guided flow.
+          </p>
         </div>
 
-        {/* Notification Toast */}
-        {savedToast && (
-          <div className="mt-space-sm flex items-center gap-2 p-2 rounded-lg bg-tertiary-fixed/20 border border-on-tertiary-container/30 text-on-surface text-body-sm animate-fade-in">
-            <span className="material-symbols-outlined text-[16px] text-on-tertiary-container">check_circle</span>
-            <span>{savedToast}</span>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => { createNewSession(); setCurrentStep(1); }}
+          className="btn-outline flex-shrink-0"
+        >
+          <span className="material-symbols-outlined text-[16px]">add_circle</span>
+          New Session
+        </button>
       </section>
 
-      {/* 5-Step Phase-1 Stepper */}
-      <nav aria-label="Verification Workflow Stages" className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-md">
-        <div className="flex items-center justify-between overflow-x-auto gap-2">
+      {/* Notification Toast */}
+      {savedToast && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-[#DCFCE7] text-[#15803D] font-body-sm text-body-sm fade-in">
+          <span className="material-symbols-outlined text-[18px]">check_circle</span>
+          <span>{savedToast}</span>
+        </div>
+      )}
+
+      {/* 5-Step Horizontal Stepper */}
+      <nav aria-label="Verification Workflow Stages" className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
+        <div className="flex items-center justify-between overflow-x-auto gap-1">
           {WORKFLOW_STEPS.map((stepItem, idx) => {
             const isDone = stepItem.step < currentStep;
             const isActive = stepItem.step === currentStep;
@@ -180,42 +145,33 @@ export const NewTestSessionView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleStepClick(stepItem.step)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all flex-shrink-0 text-left ${
-                    isActive 
-                      ? 'bg-primary-container text-on-primary shadow-sm ring-1 ring-primary/20' 
-                      : 'hover:bg-surface-container-low text-on-surface-variant'
-                  }`}
+                  className="flex flex-col items-center gap-2 flex-shrink-0 text-center group"
                 >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${
-                    isDone 
-                      ? 'bg-on-tertiary-container text-white' 
-                      : isActive 
-                      ? 'bg-secondary text-on-secondary' 
-                      : 'bg-surface-container text-outline'
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
+                    isActive
+                      ? 'bg-primary text-white shadow-card'
+                      : isDone
+                      ? 'bg-[#EEEBFF] text-primary'
+                      : 'bg-surface-container text-outline group-hover:bg-surface-container-high'
                   }`}>
                     {isDone ? (
-                      <span className="material-symbols-outlined text-[16px]">check</span>
+                      <span className="material-symbols-outlined text-[18px]">check</span>
                     ) : (
                       <span>{stepItem.step}</span>
                     )}
                   </div>
-                  <div>
-                    <div className={`font-label-mono-sm text-[11px] font-bold whitespace-nowrap ${
-                      isActive ? 'text-on-primary' : isDone ? 'text-on-tertiary-container' : 'text-primary'
+                  <div className="hidden sm:block">
+                    <div className={`font-body-sm text-body-sm font-semibold whitespace-nowrap ${
+                      isActive ? 'text-primary' : isDone ? 'text-on-surface' : 'text-on-surface-variant'
                     }`}>
-                      {stepItem.label}
-                    </div>
-                    <div className={`font-body-sm text-[10px] hidden sm:block ${
-                      isActive ? 'text-on-primary/80' : 'text-outline'
-                    }`}>
-                      {stepItem.desc}
+                      {stepItem.short.replace(/^\d+\.\s*/, '')}
                     </div>
                   </div>
                 </button>
 
                 {idx < WORKFLOW_STEPS.length - 1 && (
-                  <div className={`h-0.5 flex-1 min-w-[16px] transition-colors ${
-                    stepItem.step < currentStep ? 'bg-on-tertiary-container' : 'bg-outline-variant/40'
+                  <div className={`h-0.5 flex-1 min-w-[16px] mb-5 sm:mb-6 rounded-full transition-colors ${
+                    stepItem.step < currentStep ? 'bg-primary' : 'bg-outline-variant'
                   }`} />
                 )}
               </React.Fragment>
@@ -224,7 +180,7 @@ export const NewTestSessionView: React.FC = () => {
         </div>
       </nav>
 
-      {/* Step View Render */}
+      {/* Step View Render — each step renders its own contextual footer actions */}
       {renderStepContent()}
     </div>
   );
@@ -436,7 +392,7 @@ const SetupLabView: React.FC<SetupLabViewProps> = ({ onContinue }) => {
         {/* ==================================================================
             SECTION A — APPLICATION / TEST INFORMATION
             ================================================================== */}
-        <section className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg space-y-space-md">
+        <section className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg space-y-space-md">
           <div className="flex items-center justify-between border-b border-outline-variant/20 pb-space-sm">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-5 rounded-full bg-primary" />
@@ -549,7 +505,7 @@ const SetupLabView: React.FC<SetupLabViewProps> = ({ onContinue }) => {
         {/* ==================================================================
             SECTION B — INSTRUMENT IDENTITY
             ================================================================== */}
-        <section className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg space-y-space-md">
+        <section className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg space-y-space-md">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-outline-variant/20 pb-space-sm">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-5 rounded-full bg-secondary" />
@@ -696,7 +652,7 @@ const SetupLabView: React.FC<SetupLabViewProps> = ({ onContinue }) => {
         {/* ==================================================================
             SECTION C — METROLOGICAL SPECIFICATIONS
             ================================================================== */}
-        <section className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg space-y-space-md">
+        <section className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg space-y-space-md">
           <div className="flex items-center justify-between border-b border-outline-variant/20 pb-space-sm">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-5 rounded-full bg-on-tertiary-container" />
@@ -1088,7 +1044,7 @@ const SetupLabView: React.FC<SetupLabViewProps> = ({ onContinue }) => {
         {/* ==================================================================
             SECTION D — TEST EQUIPMENT / REFERENCE STANDARDS
             ================================================================== */}
-        <section className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg space-y-space-md">
+        <section className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg space-y-space-md">
           <div className="flex items-center justify-between border-b border-outline-variant/20 pb-space-sm">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-5 rounded-full bg-secondary" />
@@ -1286,7 +1242,7 @@ const SetupLabView: React.FC<SetupLabViewProps> = ({ onContinue }) => {
         {/* ==================================================================
             SECTION E — LABORATORY ENVIRONMENTAL CONDITIONS
             ================================================================== */}
-        <section className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg space-y-space-md">
+        <section className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg space-y-space-md">
           <div className="flex items-center justify-between border-b border-outline-variant/20 pb-space-sm">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-5 rounded-full bg-primary" />
@@ -1412,7 +1368,7 @@ const SetupLabView: React.FC<SetupLabViewProps> = ({ onContinue }) => {
 
       {/* Right Column: Verification Parameters Summary Panel */}
       <div className="space-y-space-md sticky top-6">
-        <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg">
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
           <div className="flex items-center justify-between mb-space-md border-b border-outline-variant/20 pb-space-xs">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-4 rounded-full bg-primary" />

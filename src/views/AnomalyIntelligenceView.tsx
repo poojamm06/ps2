@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useVerification } from '../context/VerificationContext';
 import { anomalyApi, type AnomalyApiResult } from '../services/api';
+import { getMpeForLoad } from '../utils/oimlMpe';
 
 export const AnomalyIntelligenceView: React.FC = () => {
   const { setCurrentView, activeBackendSessionId, draftSession, backendConnected } = useVerification();
@@ -28,15 +29,98 @@ export const AnomalyIntelligenceView: React.FC = () => {
     loadExisting();
   }, [loadExisting]);
 
+  // Deterministic local fallback — Z-score analysis computed from the draft
+  // session's own observation points, so "Run Analysis" is never dead offline.
+  const runLocalAnalysis = (): AnomalyApiResult => {
+    const points = (draftSession.staticWeighingPoints || []).filter(
+      pt => pt.appliedLoad?.trim() && pt.indication?.trim() &&
+            !isNaN(parseFloat(pt.appliedLoad)) && !isNaN(parseFloat(pt.indication))
+    );
+
+    const unit = draftSession.unit || 'g';
+    const accuracyClass = draftSession.accuracyClass || 'II';
+    const e = draftSession.verificationScaleInterval_e || 0.1;
+
+    const evaluated = points.map(pt => {
+      const load = parseFloat(pt.appliedLoad);
+      const ind = parseFloat(pt.indication);
+      const delta = parseFloat(pt.additionalLoadDeltaL) || 0;
+      const e0 = parseFloat(pt.zeroErrorE0) || 0;
+      const P = ind + 0.5 * e - delta;
+      const error = Number(((P - load) - e0).toFixed(6));
+      const mpe = getMpeForLoad(load, e, accuracyClass, unit);
+      return {
+        test_point: `${load} ${unit}`,
+        reference_value: load,
+        indicated_value: ind,
+        error,
+        mpe: mpe.limitValue,
+        compliance_result: Math.abs(error) <= mpe.limitValue ? 'PASS' : 'FAIL',
+      };
+    });
+
+    if (evaluated.length < 2) {
+      return {
+        session_id: activeBackendSessionId || 0,
+        detection_method: 'ZSCORE',
+        classification: 'INSUFFICIENT_DATA',
+        anomaly_score: 0,
+        is_demo_mode: true,
+        summary: 'Fewer than 2 recorded observations — record more test points in Observations to enable statistical anomaly screening.',
+        flags: [],
+        per_reading: evaluated,
+        advisory_notice: 'Advisory layer only. Does not affect the statutory OIML R-76 compliance verdict.',
+      };
+    }
+
+    const errors = evaluated.map(r => r.error);
+    const mean = errors.reduce((a, b) => a + b, 0) / errors.length;
+    const variance = errors.reduce((a, v) => a + Math.pow(v - mean, 2), 0) / errors.length;
+    const stdDev = Math.sqrt(variance) || 1e-9;
+
+    const flags = evaluated
+      .map((r, idx) => ({ idx, z: (r.error - mean) / stdDev }))
+      .filter(({ z }) => Math.abs(z) > 1.5)
+      .map(({ idx, z }) => ({
+        index: idx,
+        error_value: evaluated[idx].error,
+        z_score: Number(z.toFixed(2)),
+        flag: Math.abs(z) > 2.5 ? 'Z-Score Outlier' : 'Z-Score Deviation',
+        description: `Observation at ${evaluated[idx].test_point} deviates ${Math.abs(z).toFixed(2)}σ from the session mean error (${mean >= 0 ? '+' : ''}${mean.toFixed(4)} ${unit}).`,
+      }));
+
+    const anomalyScore = Math.min(1, flags.length / evaluated.length);
+    const classification: AnomalyApiResult['classification'] =
+      flags.some(f => Math.abs(f.z_score!) > 2.5) ? 'ANOMALY' : flags.length > 0 ? 'ATTENTION' : 'NORMAL';
+
+    return {
+      session_id: activeBackendSessionId || 0,
+      detection_method: 'ZSCORE',
+      classification,
+      anomaly_score: anomalyScore,
+      is_demo_mode: true,
+      summary: flags.length === 0
+        ? `All ${evaluated.length} observations fall within ±1.5σ of the session mean — no statistical anomalies detected.`
+        : `${flags.length} of ${evaluated.length} observations deviate beyond ±1.5σ from the session mean error.`,
+      flags,
+      per_reading: evaluated,
+      advisory_notice: 'Advisory layer only, computed locally from this session’s draft observations. Does not affect the statutory OIML R-76 compliance verdict.',
+    };
+  };
+
   const handleRunAnalysis = async () => {
-    if (!activeBackendSessionId) return;
     setRunning(true);
     setError(null);
     try {
-      const freshResult = await anomalyApi.runSessionAnomaly(activeBackendSessionId);
-      setResult(freshResult);
+      if (activeBackendSessionId && backendConnected) {
+        const freshResult = await anomalyApi.runSessionAnomaly(activeBackendSessionId);
+        setResult(freshResult);
+      } else {
+        setResult(runLocalAnalysis());
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to run anomaly analysis.');
+      console.warn('Anomaly backend unavailable, using local analysis:', err?.message);
+      setResult(runLocalAnalysis());
     } finally {
       setRunning(false);
     }
@@ -82,7 +166,7 @@ export const AnomalyIntelligenceView: React.FC = () => {
             </button>
             <button
               onClick={handleRunAnalysis}
-              disabled={running || !activeBackendSessionId || !backendConnected}
+              disabled={running}
               className="btn-primary"
             >
               {running
@@ -110,13 +194,13 @@ export const AnomalyIntelligenceView: React.FC = () => {
         </div>
       </section>
 
-      {/* No session selected */}
-      {!activeBackendSessionId && (
-        <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-xl text-center">
+      {/* No data at all — no backend session AND no local draft observations */}
+      {!activeBackendSessionId && (draftSession.staticWeighingPoints || []).length < 2 && !result && (
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-xl text-center">
           <span className="material-symbols-outlined text-[48px] text-outline mb-4">assignment</span>
-          <h3 className="font-headline-sm text-headline-sm text-primary font-bold">No Active Session</h3>
+          <h3 className="font-headline-sm text-headline-sm text-primary font-bold">No Observations Yet</h3>
           <p className="font-body-md text-body-md text-on-surface-variant mt-2">
-            Create or resume a verification session, then return here to run anomaly analysis.
+            Create or resume a verification session and record observations, then return here to run anomaly analysis.
           </p>
           <button onClick={() => setCurrentView('new-test-session')} className="btn-primary mt-4">
             <span className="material-symbols-outlined text-[16px]">add_circle</span>
@@ -127,7 +211,7 @@ export const AnomalyIntelligenceView: React.FC = () => {
 
       {/* Loading */}
       {loading && (
-        <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-xl text-center">
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-xl text-center">
           <span className="material-symbols-outlined text-[40px] text-secondary animate-spin mb-4">progress_activity</span>
           <p className="font-body-md text-body-md text-on-surface-variant">Loading anomaly analysis...</p>
         </div>
@@ -152,7 +236,7 @@ export const AnomalyIntelligenceView: React.FC = () => {
               { label: 'Flags Detected', value: String(result.flags?.length || 0), color: result.flags?.length > 0 ? 'text-error' : 'text-on-tertiary-container' },
               { label: 'Method', value: result.detection_method, color: 'text-on-surface-variant' },
             ].map(stat => (
-              <div key={stat.label} className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-md">
+              <div key={stat.label} className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-md">
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider">{stat.label}</span>
                 </div>
@@ -162,7 +246,7 @@ export const AnomalyIntelligenceView: React.FC = () => {
           </div>
 
           {/* Summary */}
-          <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
             <div className="flex items-start gap-3">
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${classificationBg(result.classification)}`}>
                 <span className="material-symbols-outlined text-[24px]">
@@ -197,7 +281,7 @@ export const AnomalyIntelligenceView: React.FC = () => {
 
           {/* Statistical Flags */}
           {result.flags && result.flags.length > 0 && (
-            <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg">
+            <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
               <div className="flex items-center gap-2 mb-space-md">
                 <span className="section-header-bar"></span>
                 <div>
@@ -235,7 +319,7 @@ export const AnomalyIntelligenceView: React.FC = () => {
 
           {/* Per-reading breakdown */}
           {result.per_reading && result.per_reading.length > 0 && (
-            <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg">
+            <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
               <div className="flex items-center gap-2 mb-space-md">
                 <span className="section-header-bar"></span>
                 <h3 className="font-headline-sm text-headline-sm text-primary font-bold">Per-Reading Anomaly Breakdown</h3>
@@ -284,8 +368,8 @@ export const AnomalyIntelligenceView: React.FC = () => {
       )}
 
       {/* Not yet run */}
-      {!result && !loading && activeBackendSessionId && (
-        <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-xl text-center">
+      {!result && !loading && ((draftSession.staticWeighingPoints || []).length >= 2 || activeBackendSessionId) && (
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-xl text-center">
           <span className="material-symbols-outlined text-[48px] text-outline mb-4">query_stats</span>
           <h3 className="font-headline-sm text-headline-sm text-primary font-bold">No Analysis Run Yet</h3>
           <p className="font-body-md text-body-md text-on-surface-variant mt-2">
@@ -293,7 +377,7 @@ export const AnomalyIntelligenceView: React.FC = () => {
           </p>
           <button
             onClick={handleRunAnalysis}
-            disabled={running || !backendConnected}
+            disabled={running}
             className="btn-primary mt-4"
           >
             <span className="material-symbols-outlined text-[16px]">query_stats</span>

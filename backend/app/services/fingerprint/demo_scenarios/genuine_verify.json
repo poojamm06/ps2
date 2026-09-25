@@ -1,0 +1,23 @@
+{
+  "scenario_id": "genuine",
+  "label": "Genuine Approved Unit — Re-Verification",
+  "instrument_serial": "MT-XP205-89410",
+  "readings": [
+    { "test_point": "Weighing Performance", "reference_value": 50, "indicated_value": 50.0000 },
+    { "test_point": "Weighing Performance", "reference_value": 100, "indicated_value": 100.0012 },
+    { "test_point": "Weighing Performance", "reference_value": 150, "indicated_value": 150.0021 },
+    { "test_point": "Weighing Performance", "reference_value": 200, "indicated_value": 200.0029 },
+    { "test_point": "Weighing Performance", "reference_value": 205, "indicated_value": 205.0032 },
+    { "test_point": "Weighing Performance", "reference_value": 210, "indicated_value": 210.0041 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 100.0002 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 100.0009 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 99.9992 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 100.0001 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 100.0011 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.0011 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.0019 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.0002 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.0009 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.0021 }
+  ]
+}

@@ -11,10 +11,14 @@ SCOPE: This is a prototype demonstration harness modeled on OIML R-76 Clause
 WELMEC certification or a live instrument connection.
 """
 import json
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
+from pydantic import BaseModel
+
+from app.services.reports import build_software_exam_pdf
 
 router = APIRouter(prefix="/software-exam", tags=["Software Examination (Demo)"])
 
@@ -103,3 +107,56 @@ def run_scenario(scenario_id: str) -> Dict[str, Any]:
             "overall_verdict": "FAIL" if failed > 0 else "PASS",
         },
     }
+
+
+# ============================================================================
+# PDF Examination Report
+# ============================================================================
+
+class ExamCommandIn(BaseModel):
+    test_id: str
+    suite: str
+    description: str
+    command_sent: str
+    response_received: str
+    rule: str
+    verdict: str
+    severity: Optional[str] = None
+
+
+class ExamSummaryIn(BaseModel):
+    total: int
+    passed: int
+    failed: int
+    overall_verdict: str
+
+
+class SoftwareExamReportRequest(BaseModel):
+    scenario_id: Optional[str] = None
+    scenario_name: str
+    interface: Optional[str] = None
+    declared_firmware: Optional[str] = None
+    declared_checksum: Optional[str] = None
+    commands: List[ExamCommandIn]
+    summary: ExamSummaryIn
+
+
+@router.post("/report/pdf", status_code=status.HTTP_200_OK)
+def download_software_exam_report_pdf(payload: SoftwareExamReportRequest):
+    """
+    Generates a professional PDF examination report from the results of a
+    completed (real or demo) software examination run — per-suite command
+    tables with FAIL rows highlighted, summary banner, and critical findings.
+    """
+    exam_data = payload.model_dump()
+    pdf_buffer = build_software_exam_pdf(exam_data)
+
+    scenario_slug = (payload.scenario_id or payload.scenario_name or "exam").replace(" ", "_")
+    date_str = datetime.now().strftime("%Y%m%d")
+    filename = f"NAWI_SoftwareExam_{scenario_slug}_{date_str}.pdf"
+
+    return Response(
+        content=pdf_buffer.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )

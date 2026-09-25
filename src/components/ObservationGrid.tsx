@@ -6,6 +6,7 @@ import {
   createColumnHelper,
 } from '@tanstack/react-table';
 import type { StaticWeighingPoint } from '../types';
+import { getMpeForLoad as getMpeForLoadShared } from '../utils/oimlMpe';
 
 interface ObservationGridProps {
   points: StaticWeighingPoint[];
@@ -32,29 +33,9 @@ export const ObservationGrid: React.FC<ObservationGridProps> = ({
   onDeletePoint,
   onDuplicatePoint,
 }) => {
-  // Helper to compute MPE limit based on load and class
-  const getMpeForLoad = (loadVal: number) => {
-    const e = verificationScaleInterval_e > 0 ? verificationScaleInterval_e : 0.1;
-    const m = Math.abs(loadVal) / e;
-    let factor = 0.5;
-
-    if (accuracyClass === 'I') {
-      factor = m <= 50000 ? 0.5 : m <= 200000 ? 1.0 : 1.5;
-    } else if (accuracyClass === 'II') {
-      factor = m <= 5000 ? 0.5 : m <= 20000 ? 1.0 : 1.5;
-    } else if (accuracyClass === 'III') {
-      factor = m <= 500 ? 0.5 : m <= 2000 ? 1.0 : 1.5;
-    } else {
-      factor = m <= 50 ? 0.5 : m <= 200 ? 1.0 : 1.5;
-    }
-
-    const limitInUnit = (factor * e).toFixed(4);
-    return {
-      factor,
-      m: Math.round(m),
-      limitStr: `±${limitInUnit} ${unit} (±${factor}e)`,
-    };
-  };
+  // OIML R-76 Table 6 MPE lookup — shared with the Results fallback (utils/oimlMpe.ts)
+  const getMpeForLoad = (loadVal: number) =>
+    getMpeForLoadShared(loadVal, verificationScaleInterval_e, accuracyClass, unit);
 
   // Define TanStack Table columns
   const columns = useMemo(
@@ -99,7 +80,7 @@ export const ObservationGrid: React.FC<ObservationGridProps> = ({
                     isOverMax || isInvalidNum
                       ? 'border-error bg-error/5 text-error focus:ring-error'
                       : isUnderMin
-                      ? 'border-amber-500 bg-amber-500/5 text-on-surface focus:ring-amber-500'
+                      ? 'border-[#F59E0B] bg-[#FEF3C7]/40 text-on-surface focus:ring-[#F59E0B]'
                       : 'border-outline-variant/50 bg-surface-container-lowest text-primary focus:border-secondary focus:ring-secondary'
                   }`}
                 />
@@ -428,10 +409,10 @@ export const ObservationGrid: React.FC<ObservationGridProps> = ({
   });
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-outline-variant/30 shadow-sm bg-surface-container-lowest">
+    <div className="overflow-x-auto rounded-2xl border border-outline-variant/40 shadow-card bg-surface-container-lowest">
       <table className="w-full text-left border-collapse">
         {/* Table Header */}
-        <thead className="bg-surface-container-low border-b border-outline-variant/30 sticky top-0 z-10">
+        <thead className="bg-[#F4F2FF] border-b border-outline-variant/40 sticky top-0 z-10">
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
@@ -450,7 +431,7 @@ export const ObservationGrid: React.FC<ObservationGridProps> = ({
         </thead>
 
         {/* Table Body */}
-        <tbody className="divide-y divide-outline-variant/20 font-body-sm">
+        <tbody className="divide-y divide-outline-variant/30 font-body-sm">
           {table.getRowModel().rows.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="text-center py-10 text-on-surface-variant">
@@ -464,10 +445,10 @@ export const ObservationGrid: React.FC<ObservationGridProps> = ({
               </td>
             </tr>
           ) : (
-            table.getRowModel().rows.map((row) => (
-              <tr 
-                key={row.id} 
-                className="hover:bg-surface-container-low/50 transition-colors group"
+            table.getRowModel().rows.map((row, idx) => (
+              <tr
+                key={row.id}
+                className={`hover:bg-[#F4F2FF] transition-colors group ${idx % 2 === 1 ? 'bg-surface-container-low/40' : ''}`}
               >
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id} className="px-3 py-2 align-middle">

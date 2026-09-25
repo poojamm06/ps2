@@ -51,7 +51,7 @@ export const PlaceholderView: React.FC<PlaceholderViewProps> = ({ moduleKey }) =
         </div>
       </section>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-xl flex flex-col items-center justify-center text-center min-h-[400px]">
+      <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-xl flex flex-col items-center justify-center text-center min-h-[400px]">
         <div className="w-20 h-20 rounded-2xl bg-primary-container flex items-center justify-center mb-6">
           <span className="material-symbols-outlined text-on-primary text-[40px]">{module.icon}</span>
         </div>

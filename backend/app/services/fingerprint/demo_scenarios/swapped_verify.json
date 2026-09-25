@@ -1,0 +1,23 @@
+{
+  "scenario_id": "swapped",
+  "label": "Replica / Substituted Unit — Same Serial Sticker",
+  "instrument_serial": "MT-XP205-89410",
+  "readings": [
+    { "test_point": "Weighing Performance", "reference_value": 50, "indicated_value": 50.0005 },
+    { "test_point": "Weighing Performance", "reference_value": 100, "indicated_value": 99.9993 },
+    { "test_point": "Weighing Performance", "reference_value": 150, "indicated_value": 150.0035 },
+    { "test_point": "Weighing Performance", "reference_value": 200, "indicated_value": 200.0006 },
+    { "test_point": "Weighing Performance", "reference_value": 205, "indicated_value": 205.0040 },
+    { "test_point": "Weighing Performance", "reference_value": 210, "indicated_value": 209.9993 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 100.0012 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 99.9982 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 100.0024 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 99.9994 },
+    { "test_point": "Repeatability", "reference_value": 100, "indicated_value": 100.0018 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.0024 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 49.9988 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.0030 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 49.9994 },
+    { "test_point": "Eccentricity", "reference_value": 50, "indicated_value": 50.0024 }
+  ]
+}

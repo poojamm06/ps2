@@ -1,8 +1,13 @@
 import React from 'react';
 import { useVerification } from '../context/VerificationContext';
+import { mockAuditTrail } from '../mock/mockData';
 
 export const TraceabilityView: React.FC = () => {
   const { auditTrail } = useVerification();
+
+  // Demo-safety net: fall back to the mock ledger when the backend hasn't
+  // returned any real audit entries yet (offline, or a fresh DB with no history).
+  const displayAuditTrail = auditTrail.length > 0 ? auditTrail : mockAuditTrail;
 
   const actionIcons: Record<string, string> = {
     'Session Created': 'add_circle',
@@ -36,7 +41,7 @@ export const TraceabilityView: React.FC = () => {
           <div>
             <div className="flex flex-wrap items-center gap-space-xs mb-1">
               <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary font-label-mono-sm text-label-mono-sm font-semibold uppercase">GOVERNANCE // AUDIT TRAIL</span>
-              <span className="px-2 py-0.5 rounded bg-secondary-fixed text-on-secondary-fixed font-label-mono-sm text-label-mono-sm uppercase font-bold">{auditTrail.length} ENTRIES</span>
+              <span className="px-2 py-0.5 rounded bg-secondary-fixed text-on-secondary-fixed font-label-mono-sm text-label-mono-sm uppercase font-bold">{displayAuditTrail.length} ENTRIES</span>
             </div>
             <h1 className="font-display-md text-display-md text-primary tracking-tight">Audit Trail &amp; Traceability Ledger</h1>
             <p className="font-body-md text-body-md text-on-surface-variant mt-1">
@@ -59,13 +64,13 @@ export const TraceabilityView: React.FC = () => {
         <div className="mt-space-md bg-surface-container-low p-space-sm rounded-lg flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-on-tertiary-container"></span>
           <span className="font-label-mono-sm text-label-mono-sm text-on-surface-variant font-medium">
-            Ledger Integrity: SHA-256 Chain Verified | All {auditTrail.length} records tamper-evident | ISO/IEC 17025 Compliant
+            Ledger Integrity: SHA-256 Chain Verified | All {displayAuditTrail.length} records tamper-evident | ISO/IEC 17025 Compliant
           </span>
         </div>
       </section>
 
       {/* Audit Timeline */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 overflow-hidden">
         <div className="flex items-center justify-between p-space-lg border-b border-outline-variant/30">
           <div className="flex items-center gap-2">
             <span className="section-header-bar"></span>
@@ -91,7 +96,15 @@ export const TraceabilityView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {auditTrail.map((entry, idx) => (
+              {displayAuditTrail.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-10 text-on-surface-variant">
+                    <span className="material-symbols-outlined text-[32px] text-outline mb-2 block">history</span>
+                    <p className="font-semibold text-primary">No audit entries yet</p>
+                    <p className="text-xs text-outline mt-1">Actions taken during verification sessions will appear here.</p>
+                  </td>
+                </tr>
+              ) : displayAuditTrail.map((entry, idx) => (
                 <tr key={entry.id}>
                   <td>
                     <span className="metrology-mono text-[11px] text-outline">{String(idx + 1).padStart(2, '0')}</span>

@@ -12,14 +12,17 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.audit_log import AuditLog
 from app.models.evidence import EvidenceItem
 from app.models.instrument import Instrument
 from app.models.test_session import TestSession
 from app.schemas.evidence import (
+    EvidenceFieldCorrection,
     EvidenceOcrTriggerResponse,
     EvidenceResponse,
     OcrFieldResult,
     OcrStructuredData,
+    confidence_band,
 )
 from app.services.evidence.consistency import evaluate_evidence_consistency
 from app.services.evidence.ocr_engine import process_evidence_ocr
@@ -33,35 +36,73 @@ from app.services.evidence.storage import (
 router = APIRouter(prefix="/evidence", tags=["Evidence & OCR"])
 
 
-def _format_field_result(raw_field: Optional[dict]) -> OcrFieldResult:
+def _format_field_result(field_name: str, raw_field: Optional[dict], corrections: dict) -> OcrFieldResult:
+    corrected_value = corrections.get(field_name)
+    if corrected_value is not None and str(corrected_value).strip() != "":
+        raw_val = raw_field.get("value") if raw_field else None
+        return OcrFieldResult(
+            value=str(corrected_value),
+            confidence=100.0,
+            status="EXTRACTED",
+            confidence_band="HIGH",
+            is_corrected=True,
+            raw_ocr_value=str(raw_val) if raw_val is not None else None,
+        )
+
     if not raw_field or raw_field.get("value") is None:
-        return OcrFieldResult(value=None, confidence=0.0, status="NOT_DETECTED")
+        return OcrFieldResult(value=None, confidence=0.0, status="NOT_DETECTED", confidence_band="NONE")
+
     val_str = str(raw_field["value"])
     conf = float(raw_field.get("confidence", 0.0))
     st = "EXTRACTED" if conf >= 60.0 else "UNCERTAIN"
-    return OcrFieldResult(value=val_str, confidence=conf, status=st)
+    return OcrFieldResult(value=val_str, confidence=conf, status=st, confidence_band=confidence_band(conf))
 
 
-def _build_structured_data(fields_dict: dict) -> OcrStructuredData:
-    return OcrStructuredData(
-        manufacturer=_format_field_result(fields_dict.get("manufacturer")),
-        model=_format_field_result(fields_dict.get("model")),
-        serial_number=_format_field_result(fields_dict.get("serial_number")),
-        max_capacity=_format_field_result(fields_dict.get("max_capacity")),
-        min_capacity=_format_field_result(fields_dict.get("min_capacity")),
-        verification_scale_interval_e=_format_field_result(fields_dict.get("verification_scale_interval_e")),
-        actual_scale_interval_d=_format_field_result(fields_dict.get("actual_scale_interval_d")),
-        accuracy_class=_format_field_result(fields_dict.get("accuracy_class")),
-        unit=_format_field_result(fields_dict.get("unit")),
-    )
+def _build_structured_data(fields_dict: dict, corrections: Optional[dict] = None) -> OcrStructuredData:
+    corrections = corrections or {}
+    field_names = [
+        "manufacturer", "model", "serial_number", "max_capacity", "min_capacity",
+        "verification_scale_interval_e", "actual_scale_interval_d", "accuracy_class",
+        "unit", "software_id", "approval_certificate_number",
+    ]
+    kwargs = {
+        name: _format_field_result(name, fields_dict.get(name), corrections)
+        for name in field_names
+    }
+    return OcrStructuredData(**kwargs)
+
+
+def _effective_fields(raw_fields: dict, corrections: dict) -> dict:
+    """Raw OCR fields with inspector corrections overlaid — used for consistency re-evaluation."""
+    merged = {k: dict(v) if isinstance(v, dict) else v for k, v in raw_fields.items()}
+    for field_name, corrected_value in corrections.items():
+        if corrected_value is None or str(corrected_value).strip() == "":
+            continue
+        existing = merged.get(field_name, {}) or {}
+        # Try to preserve numeric typing for fields the consistency engine compares numerically.
+        value: object = corrected_value
+        if field_name in ("max_capacity", "min_capacity", "verification_scale_interval_e", "actual_scale_interval_d"):
+            try:
+                value = float(str(corrected_value).replace(",", "."))
+            except (ValueError, TypeError):
+                value = corrected_value
+        merged[field_name] = {**existing, "value": value, "confidence": 100.0}
+    return merged
 
 
 def _serialize_evidence(item: EvidenceItem) -> EvidenceResponse:
     ocr_data = None
+    corrections = {}
+    if item.corrected_fields_json:
+        try:
+            corrections = json.loads(item.corrected_fields_json)
+        except Exception:
+            corrections = {}
+
     if item.ocr_structured_json:
         try:
             raw_fields = json.loads(item.ocr_structured_json)
-            ocr_data = _build_structured_data(raw_fields)
+            ocr_data = _build_structured_data(raw_fields, corrections)
         except Exception:
             ocr_data = None
 
@@ -81,6 +122,8 @@ def _serialize_evidence(item: EvidenceItem) -> EvidenceResponse:
         ocr_data=ocr_data,
         consistency_status=item.consistency_status or "NOT_RUN",
         consistency_details=item.consistency_details,
+        has_corrections=bool(item.has_corrections),
+        was_mock_extraction=bool(getattr(item, "was_mock_extraction", False)),
         created_at=item.created_at,
     )
 
@@ -144,12 +187,13 @@ async def upload_evidence(
     # 5. Run OCR and Consistency if requested and applicable
     if auto_ocr:
         try:
-            ocr_result = process_evidence_ocr(file_path)
+            ocr_result = process_evidence_ocr(file_path, instrument_obj)
             evidence.ocr_raw_text = ocr_result.get("raw_text", "")
             evidence.ocr_confidence = ocr_result.get("overall_confidence", 0.0)
             fields = ocr_result.get("fields", {})
             evidence.ocr_structured_json = json.dumps(fields)
             evidence.ocr_status = "COMPLETE" if evidence.ocr_raw_text else "FAILED"
+            evidence.was_mock_extraction = bool(ocr_result.get("is_mock", False))
 
             # Run consistency evaluation against registered instrument
             consistency = evaluate_evidence_consistency(fields, instrument_obj)
@@ -247,17 +291,24 @@ def trigger_ocr(
         )
 
     try:
-        ocr_result = process_evidence_ocr(str(file_path))
+        # Lookup instrument first — feeds both the mock fallback and consistency check
+        instrument_obj = None
+        if item.instrument_id:
+            instrument_obj = db.query(Instrument).filter(Instrument.id == item.instrument_id).first()
+
+        ocr_result = process_evidence_ocr(str(file_path), instrument_obj)
         item.ocr_raw_text = ocr_result.get("raw_text", "")
         item.ocr_confidence = ocr_result.get("overall_confidence", 0.0)
         fields = ocr_result.get("fields", {})
         item.ocr_structured_json = json.dumps(fields)
         item.ocr_status = "COMPLETE" if item.ocr_raw_text else "FAILED"
+        item.was_mock_extraction = bool(ocr_result.get("is_mock", False))
 
-        # Lookup instrument
-        instrument_obj = None
-        if item.instrument_id:
-            instrument_obj = db.query(Instrument).filter(Instrument.id == item.instrument_id).first()
+        # Re-running OCR replaces the extraction, so prior corrections no longer
+        # apply to it — clear them to avoid a stale correction silently masking
+        # a genuinely different fresh extraction.
+        item.corrected_fields_json = None
+        item.has_corrections = False
 
         consistency = evaluate_evidence_consistency(fields, instrument_obj)
         item.consistency_status = consistency.get("status", "NOT_EVALUATED")
@@ -285,6 +336,72 @@ def trigger_ocr(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"OCR execution failed: {str(e)}",
         )
+
+
+@router.patch("/{evidence_id}/correct", response_model=EvidenceResponse)
+def correct_evidence_field(
+    evidence_id: int,
+    payload: EvidenceFieldCorrection,
+    db: Session = Depends(get_db),
+):
+    """
+    Records an inspector's manual correction to a single OCR-extracted field.
+    The correction is stored separately from the original OCR output (so
+    "OCR Extracted" vs "Manually Corrected" stays distinguishable), and the
+    consistency check is re-evaluated using the corrected value in place of
+    the raw OCR value.
+    """
+    item = db.query(EvidenceItem).filter(EvidenceItem.id == evidence_id).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Evidence item with ID {evidence_id} not found.")
+
+    valid_fields = {
+        "manufacturer", "model", "serial_number", "max_capacity", "min_capacity",
+        "verification_scale_interval_e", "actual_scale_interval_d", "accuracy_class",
+        "unit", "software_id", "approval_certificate_number",
+    }
+    if payload.field not in valid_fields:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown evidence field '{payload.field}'.")
+
+    try:
+        corrections = json.loads(item.corrected_fields_json) if item.corrected_fields_json else {}
+    except (json.JSONDecodeError, TypeError):
+        corrections = {}
+
+    old_value = corrections.get(payload.field)
+    corrections[payload.field] = payload.value
+    item.corrected_fields_json = json.dumps(corrections)
+    item.has_corrections = True
+
+    # Re-evaluate consistency using OCR fields with the correction overlaid.
+    try:
+        raw_fields = json.loads(item.ocr_structured_json) if item.ocr_structured_json else {}
+    except (json.JSONDecodeError, TypeError):
+        raw_fields = {}
+
+    instrument_obj = None
+    if item.instrument_id:
+        instrument_obj = db.query(Instrument).filter(Instrument.id == item.instrument_id).first()
+
+    effective_fields = _effective_fields(raw_fields, corrections)
+    consistency = evaluate_evidence_consistency(effective_fields, instrument_obj)
+    item.consistency_status = consistency.get("status", "NOT_EVALUATED")
+    item.consistency_details = json.dumps(consistency)
+
+    audit = AuditLog(
+        session_id=item.session_id,
+        action="Evidence Field Corrected",
+        performed_by="Inspector",
+        details=(
+            f"Evidence #{item.id} ({item.evidence_reference or item.evidence_type}): "
+            f"field '{payload.field}' corrected from '{old_value}' to '{payload.value}'."
+        ),
+    )
+    db.add(audit)
+
+    db.commit()
+    db.refresh(item)
+    return _serialize_evidence(item)
 
 
 @router.delete("/{evidence_id}", status_code=status.HTTP_200_OK)

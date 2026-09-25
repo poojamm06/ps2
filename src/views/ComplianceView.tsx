@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useVerification } from '../context/VerificationContext';
 import { complianceApi, readingsApi, type ApiComplianceCalculationResponse } from '../services/api';
 import type { ComplianceTestRow } from '../types';
+import { getMpeForLoad } from '../utils/oimlMpe';
 
 const defaultComplianceTests: ComplianceTestRow[] = [
   { id: 'ct_01', testType: 'Initial Zero-Setting', appliedLoad: 0.0000, indicatedValue: 0.0000, referenceValue: 0.0000, error: 0.0000, applicableMPE: 0.0010, result: 'PASS' },
@@ -84,7 +85,34 @@ export const ComplianceView: React.FC = () => {
         }));
         setTests(mapped);
       } else {
-        setTests([]);
+        // No backend readings yet — fall back to locally captured observations
+        const localPoints = draftSession.staticWeighingPoints.filter(
+          pt => pt.appliedLoad.trim() !== '' && !isNaN(parseFloat(pt.appliedLoad)) &&
+                pt.indication.trim() !== '' && !isNaN(parseFloat(pt.indication))
+        );
+        const localMapped: ComplianceTestRow[] = localPoints.map((pt) => {
+          const appliedLoad = parseFloat(pt.appliedLoad);
+          const indication = parseFloat(pt.indication);
+          const error = indication - appliedLoad;
+          const mpeResult = getMpeForLoad(
+            appliedLoad,
+            draftSession.verificationScaleInterval_e,
+            draftSession.accuracyClass,
+            draftSession.unit
+          );
+          const mpe = mpeResult.limitValue;
+          return {
+            id: `ct_local_${pt.id}`,
+            testType: 'Weighing Performance',
+            appliedLoad,
+            indicatedValue: indication,
+            referenceValue: appliedLoad,
+            error,
+            applicableMPE: mpe,
+            result: Math.abs(error) <= mpe ? 'PASS' : 'FAIL',
+          };
+        });
+        setTests(localMapped);
       }
 
       // 2. Fetch session compliance result
@@ -202,7 +230,7 @@ export const ComplianceView: React.FC = () => {
           { label: 'Review', value: reviewCount, icon: 'pending', color: 'text-error' },
           { label: 'Fail', value: failCount, icon: 'cancel', color: 'text-error' },
         ].map(stat => (
-          <div key={stat.label} className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-md">
+          <div key={stat.label} className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-md">
             <div className="flex items-center justify-between mb-1">
               <span className="font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider">{stat.label}</span>
               <span className={`material-symbols-outlined text-[20px] ${stat.color}`}>{stat.icon}</span>
@@ -213,7 +241,7 @@ export const ComplianceView: React.FC = () => {
       </div>
 
       {/* Interactive Deterministic Compliance Calculator (FastAPI Backend) */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg">
+      <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
         <div className="flex items-center justify-between mb-space-md">
           <div className="flex items-center gap-2">
             <span className="section-header-bar"></span>
@@ -354,7 +382,7 @@ export const ComplianceView: React.FC = () => {
       </div>
 
       {/* MPE Test Table */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20">
+      <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40">
         <div className="flex items-center justify-between p-space-lg border-b border-outline-variant/30">
           <div className="flex items-center gap-2">
             <span className="section-header-bar"></span>
@@ -478,10 +506,20 @@ export const ComplianceView: React.FC = () => {
             {evaluating ? 'Evaluating Session...' : 'Re-Evaluate All Points'}
           </button>
           <button
-            onClick={() => {
+            onClick={async () => {
+              // Ensure the statutory verdict is actually persisted before landing on
+              // Results — otherwise the summary has nothing to show.
+              if (activeBackendSessionId) {
+                try {
+                  await complianceApi.evaluateSession(activeBackendSessionId);
+                } catch (e: any) {
+                  console.warn('Could not evaluate session before proceeding, continuing with local verdict:', e?.message);
+                }
+              }
               proceedToStep(5);
               setCurrentView('results');
             }}
+            disabled={evaluating}
             className="btn-primary text-xs h-[42px] px-6 font-semibold"
           >
             <span>Proceed to Results Summary</span>

@@ -25,17 +25,17 @@ export const GrcAnalyticsView: React.FC = () => {
       {
         label: 'Statutory Compliance Rate (%)',
         data: [91.8, 92.4, 93.1, 93.8, 94.2, 94.6],
-        borderColor: '#3c9e57',
+        borderColor: '#16A34A',
         backgroundColor: 'rgba(60,158,87,0.08)',
         fill: true,
         tension: 0.3,
         pointRadius: 4,
-        pointBackgroundColor: '#3c9e57',
+        pointBackgroundColor: '#16A34A',
       },
       {
         label: 'Target Regulatory Threshold (90%)',
         data: [90.0, 90.0, 90.0, 90.0, 90.0, 90.0],
-        borderColor: '#ba1a1a',
+        borderColor: '#DC2626',
         borderDash: [5, 5],
         pointRadius: 0,
         fill: false,
@@ -46,11 +46,11 @@ export const GrcAnalyticsView: React.FC = () => {
   const complianceTrendOptions = {
     responsive: true, maintainAspectRatio: false,
     scales: {
-      y: { min: 85, max: 100, grid: { color: '#eff4ff' }, ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#74777f', callback: (v: any) => `${v}%` } },
-      x: { grid: { display: false }, ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#74777f' } },
+      y: { min: 85, max: 100, grid: { color: '#F4F2FF' }, ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#8B8AA3', callback: (v: any) => `${v}%` } },
+      x: { grid: { display: false }, ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#8B8AA3' } },
     },
     plugins: {
-      legend: { position: 'top' as const, align: 'end' as const, labels: { boxWidth: 10, font: { family: 'JetBrains Mono', size: 10 }, color: '#44474e' } },
+      legend: { position: 'top' as const, align: 'end' as const, labels: { boxWidth: 10, font: { family: 'JetBrains Mono', size: 10 }, color: '#5A5A72' } },
     },
   };
 
@@ -60,8 +60,8 @@ export const GrcAnalyticsView: React.FC = () => {
       {
         label: 'Verification Sessions',
         data: [218, 234, 248, 261, 279, 294],
-        backgroundColor: 'rgba(0,99,152,0.6)',
-        borderColor: '#006398',
+        backgroundColor: 'rgba(74,58,255,0.6)',
+        borderColor: '#4A3AFF',
         borderWidth: 1,
         borderRadius: 4,
       },
@@ -69,7 +69,7 @@ export const GrcAnalyticsView: React.FC = () => {
         label: 'First-Pass PASS',
         data: [201, 216, 231, 245, 263, 278],
         backgroundColor: 'rgba(60,158,87,0.5)',
-        borderColor: '#3c9e57',
+        borderColor: '#16A34A',
         borderWidth: 1,
         borderRadius: 4,
       },
@@ -79,11 +79,11 @@ export const GrcAnalyticsView: React.FC = () => {
   const volumeOptions = {
     responsive: true, maintainAspectRatio: false,
     scales: {
-      y: { beginAtZero: true, grid: { color: '#eff4ff' }, ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#74777f' } },
-      x: { grid: { display: false }, ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#74777f' } },
+      y: { beginAtZero: true, grid: { color: '#F4F2FF' }, ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#8B8AA3' } },
+      x: { grid: { display: false }, ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#8B8AA3' } },
     },
     plugins: {
-      legend: { position: 'top' as const, align: 'end' as const, labels: { boxWidth: 10, font: { family: 'JetBrains Mono', size: 10 }, color: '#44474e' } },
+      legend: { position: 'top' as const, align: 'end' as const, labels: { boxWidth: 10, font: { family: 'JetBrains Mono', size: 10 }, color: '#5A5A72' } },
     },
   };
 
@@ -127,7 +127,7 @@ export const GrcAnalyticsView: React.FC = () => {
       {/* GRC KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-space-md">
         {grcKPIs.map(kpi => (
-          <div key={kpi.label} className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-md hover:shadow-card-hover transition-shadow">
+          <div key={kpi.label} className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-md hover:shadow-card-hover transition-shadow">
             <div className="flex items-center justify-between mb-2">
               <span className="font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider font-semibold">{kpi.label}</span>
               <span className={`material-symbols-outlined text-[20px] ${kpi.trendUp ? 'text-on-tertiary-container' : 'text-error'}`}>{kpi.icon}</span>
@@ -144,7 +144,7 @@ export const GrcAnalyticsView: React.FC = () => {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-md">
         {/* Compliance Trend */}
-        <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg">
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
           <div className="flex items-center gap-2 mb-space-md">
             <span className="section-header-bar"></span>
             <div>
@@ -158,7 +158,7 @@ export const GrcAnalyticsView: React.FC = () => {
         </div>
 
         {/* Verification Volume */}
-        <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20 p-space-lg">
+        <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
           <div className="flex items-center gap-2 mb-space-md">
             <span className="section-header-bar"></span>
             <div>
@@ -173,7 +173,7 @@ export const GrcAnalyticsView: React.FC = () => {
       </div>
 
       {/* Non-Conformance Register */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant/20">
+      <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40">
         <div className="flex items-center justify-between p-space-lg border-b border-outline-variant/30">
           <div className="flex items-center gap-2">
             <span className="section-header-bar"></span>

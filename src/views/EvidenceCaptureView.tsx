@@ -79,9 +79,12 @@ export const EvidenceCaptureView: React.FC = () => {
   const [activeSlotType, setActiveSlotType] = useState<string>('nameplate');
   const [selectedItem, setSelectedItem] = useState<ApiEvidenceItem | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState<string>('');
+  const [savingField, setSavingField] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const sessionId = draftSession.backendSessionId || 1;
+  const sessionId = draftSession.backendSessionId;
 
 
   // Fetch session evidence items
@@ -109,6 +112,12 @@ export const EvidenceCaptureView: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!sessionId) {
+      setApiError('No active backend session yet — create or resume a test session before capturing evidence.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     try {
       setUploading(true);
       setApiError(null);
@@ -123,7 +132,8 @@ export const EvidenceCaptureView: React.FC = () => {
       setServerEvidence(prev => [uploaded, ...prev.filter(x => x.id !== uploaded.id)]);
       setSelectedItem(uploaded);
     } catch (err: any) {
-      setApiError(err.message || 'Failed to upload evidence image');
+      console.warn('Evidence upload failed:', err?.message);
+      setApiError('Could not reach the backend to upload this image. Check your connection and try again.');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -167,6 +177,33 @@ export const EvidenceCaptureView: React.FC = () => {
       setApiError(err.message || 'OCR execution failed');
     } finally {
       setProcessingOcrId(null);
+    }
+  };
+
+  const startEditingField = (fieldName: string, currentValue: string | null) => {
+    setEditingField(fieldName);
+    setEditingValue(currentValue || '');
+  };
+
+  const cancelEditingField = () => {
+    setEditingField(null);
+    setEditingValue('');
+  };
+
+  const handleSaveCorrection = async (evidenceId: number, fieldName: string) => {
+    if (!editingValue.trim()) return;
+    try {
+      setSavingField(fieldName);
+      const updated = await evidenceApi.correctField(evidenceId, fieldName, editingValue.trim());
+      setServerEvidence(prev => prev.map(item => item.id === evidenceId ? updated : item));
+      setSelectedItem(prev => prev && prev.id === evidenceId ? updated : prev);
+      setEditingField(null);
+      setEditingValue('');
+    } catch (err: any) {
+      console.warn('Could not save field correction:', err?.message);
+      setApiError('Could not save this correction — check your connection and try again.');
+    } finally {
+      setSavingField(null);
     }
   };
 
@@ -230,7 +267,7 @@ export const EvidenceCaptureView: React.FC = () => {
                 STEP 3 // EVIDENCE CAPTURE & OCR
               </span>
               <span className="px-2 py-0.5 rounded bg-surface-container-high text-secondary font-label-mono-sm text-label-mono-sm uppercase font-bold">
-                SESSION: {draftSession.sessionId || `SESSION-${sessionId}`}
+                SESSION: {draftSession.sessionId || (sessionId ? `SESSION-${sessionId}` : 'No active session')}
               </span>
             </div>
             <h1 className="font-display-md text-display-md text-primary tracking-tight">Digital Evidence Vault</h1>
@@ -438,10 +475,13 @@ export const EvidenceCaptureView: React.FC = () => {
                 {selectedItem.ocr_raw_text || 'No raw text extracted.'}
               </div>
 
-              <div className="mt-3 flex items-center gap-4 text-xs font-label-mono-sm text-outline">
+              <div className="mt-3 flex items-center gap-4 text-xs font-label-mono-sm text-outline flex-wrap">
                 <span>Status: <strong className="text-on-surface">{selectedItem.ocr_status}</strong></span>
                 <span>Confidence: <strong className="text-on-tertiary-container">{selectedItem.ocr_confidence || 0}%</strong></span>
                 <span>Size: <strong className="text-on-surface">{Math.round((selectedItem.file_size_bytes || 0) / 1024)} KB</strong></span>
+                {selectedItem.was_mock_extraction && (
+                  <span className="badge-testing">Demo Mode — Simulated Extraction</span>
+                )}
               </div>
             </div>
 
@@ -500,6 +540,103 @@ export const EvidenceCaptureView: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Metrological Fields — Review & Correct */}
+          {selectedItem.ocr_data && (
+            <div className="mt-space-lg pt-space-md border-t border-outline-variant/20">
+              <h3 className="font-label-mono-sm text-label-mono-sm text-secondary uppercase font-bold mb-2">
+                Metrological Fields — Review &amp; Correct
+              </h3>
+              <p className="font-body-sm text-body-sm text-on-surface-variant mb-3">
+                Inspect each extracted field. If OCR misread a value, correct it below — corrections are tracked separately from the original extraction and re-evaluated against the registered instrument.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {([
+                  ['manufacturer', 'Manufacturer'],
+                  ['model', 'Model'],
+                  ['serial_number', 'Serial Number'],
+                  ['max_capacity', 'Max Capacity'],
+                  ['min_capacity', 'Min Capacity'],
+                  ['verification_scale_interval_e', 'Verification Interval (e)'],
+                  ['actual_scale_interval_d', 'Actual Interval (d)'],
+                  ['accuracy_class', 'Accuracy Class'],
+                  ['unit', 'Unit'],
+                  ['software_id', 'Software / Firmware ID'],
+                  ['approval_certificate_number', 'Approval Certificate No.'],
+                ] as const).map(([fieldKey, label]) => {
+                  const field = selectedItem.ocr_data![fieldKey];
+                  const isEditing = editingField === fieldKey;
+                  const isSaving = savingField === fieldKey;
+                  const bandClass = field.confidence_band === 'HIGH' ? 'badge-pass'
+                    : field.confidence_band === 'MEDIUM' ? 'badge-review'
+                    : field.confidence_band === 'NEEDS_REVIEW' ? 'badge-fail'
+                    : 'badge-testing';
+                  const bandLabel = field.confidence_band === 'HIGH' ? 'High'
+                    : field.confidence_band === 'MEDIUM' ? 'Medium'
+                    : field.confidence_band === 'NEEDS_REVIEW' ? 'Needs Review'
+                    : '—';
+                  return (
+                    <div key={fieldKey} className="p-space-sm rounded-lg bg-surface-container-low border border-outline-variant/30">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-semibold text-on-surface-variant">{label}</span>
+                        <div className="flex items-center gap-1">
+                          {field.is_corrected && (
+                            <span className="badge-testing !text-[9px]" title={field.raw_ocr_value ? `OCR read: ${field.raw_ocr_value}` : undefined}>
+                              Manually Corrected
+                            </span>
+                          )}
+                          {field.value && !field.is_corrected && bandLabel !== '—' && (
+                            <span className={`${bandClass} !text-[9px]`}>{bandLabel}</span>
+                          )}
+                        </div>
+                      </div>
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={editingValue}
+                            onChange={e => setEditingValue(e.target.value)}
+                            className="flex-1 px-2 py-1 rounded border border-secondary text-xs metrology-mono bg-surface-container-lowest text-on-surface focus:outline-none"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleSaveCorrection(selectedItem.id, fieldKey)}
+                            disabled={isSaving}
+                            className="p-1 rounded text-on-tertiary-container hover:bg-surface-container"
+                            title="Save correction"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">
+                              {isSaving ? 'hourglass_top' : 'check'}
+                            </span>
+                          </button>
+                          <button
+                            onClick={cancelEditingField}
+                            className="p-1 rounded text-error hover:bg-surface-container"
+                            title="Cancel"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">close</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="metrology-mono text-xs text-on-surface truncate">
+                            {field.value || <span className="text-outline italic">Not detected</span>}
+                          </span>
+                          <button
+                            onClick={() => startEditingField(fieldKey, field.value)}
+                            className="flex-shrink-0 p-1 rounded text-outline hover:text-secondary hover:bg-surface-container"
+                            title="Correct this field"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">edit</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
       )}
 

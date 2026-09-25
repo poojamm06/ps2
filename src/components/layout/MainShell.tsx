@@ -20,8 +20,8 @@ export const MainShell: React.FC<MainShellProps> = ({ children }) => {
         <AppHeader />
 
         {/* Scrollable content area below fixed header */}
-        <main className="w-full pt-14 bg-surface min-h-screen px-space-lg py-space-lg">
-          <div className="flex flex-col w-full space-y-space-md">
+        <main className="w-full pt-16 bg-surface min-h-screen px-space-lg py-space-lg">
+          <div className="flex flex-col w-full max-w-[1400px] mx-auto space-y-space-lg">
             {children}
           </div>
         </main>
