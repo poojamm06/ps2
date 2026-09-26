@@ -84,7 +84,7 @@ const typeIcons: Record<string, string> = {
 };
 
 export const EvidenceCaptureView: React.FC = () => {
-  const { draftSession, setCurrentView } = useVerification();
+  const { draftSession, activeBackendSessionId, setCurrentView } = useVerification();
   const [serverEvidence, setServerEvidence] = useState<EvidenceItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [uploading, setUploading] = useState<boolean>(false);
@@ -97,7 +97,7 @@ export const EvidenceCaptureView: React.FC = () => {
   const [savingField, setSavingField] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const sessionId = draftSession.backendSessionId;
+  const sessionId = draftSession.backendSessionId || activeBackendSessionId;
 
 
   // Fetch session evidence items
@@ -566,12 +566,28 @@ export const EvidenceCaptureView: React.FC = () => {
                 {selectedItem.ocr_raw_text || 'No raw text extracted.'}
               </div>
 
-              <div className="mt-3 flex items-center gap-4 text-xs font-label-mono-sm text-outline flex-wrap">
+              <div className="mt-3 flex items-center gap-3 text-xs font-label-mono-sm text-outline flex-wrap">
                 <span>Status: <strong className="text-on-surface">{selectedItem.ocr_status}</strong></span>
                 <span>Confidence: <strong className="text-on-tertiary-container">{selectedItem.ocr_confidence || 0}%</strong></span>
                 <span>Size: <strong className="text-on-surface">{Math.round((selectedItem.file_size_bytes || 0) / 1024)} KB</strong></span>
-                {selectedItem.was_mock_extraction && (
-                  <span className="badge-testing">Demo Mode — Simulated Extraction</span>
+                {selectedItem.was_mock_extraction ? (
+                  <span className="badge-testing font-bold">Simulated Fallback OCR</span>
+                ) : (
+                  <span className="badge-pass font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-pass animate-pulse"></span>
+                    Real RapidOCR Engine
+                  </span>
+                )}
+                {((selectedItem.ocr_confidence ?? 0) < 70 || selectedItem.ocr_status === 'FAILED') && (
+                  <button
+                    type="button"
+                    onClick={() => triggerUploadFor(selectedItem.evidence_type)}
+                    className="badge-fail font-bold cursor-pointer hover:opacity-80 flex items-center gap-1"
+                    title="Low confidence or unclear capture — click to retake photo"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">add_a_photo</span>
+                    Flagged for Recapture
+                  </button>
                 )}
               </div>
             </div>

@@ -51,18 +51,29 @@ export const NewTestSessionView: React.FC = () => {
   const { 
     draftSession, 
     createNewSession, 
-    proceedToStep 
+    proceedToStep,
+    backendConnected,
+    createBackendSession,
+    saveDraft,
   } = useVerification();
   
   const [currentStep, setCurrentStep] = useState<number>(draftSession.currentStep || 1);
   const [savedToast, setSavedToast] = useState<string | null>(null);
 
-  const handleStepClick = (stepNum: number) => {
+  const handleStepClick = async (stepNum: number) => {
+    if (backendConnected && !draftSession.backendSessionId && stepNum > 1) {
+      await createBackendSession();
+    }
     setCurrentStep(stepNum);
     proceedToStep(stepNum);
   };
 
-  const handleSaveAndContinue = () => {
+  const handleSaveAndContinue = async () => {
+    if (backendConnected && !draftSession.backendSessionId) {
+      await createBackendSession();
+    } else if (backendConnected && draftSession.backendSessionId) {
+      await saveDraft();
+    }
     // Advances from Step 1 to Step 2
     setCurrentStep(2);
     proceedToStep(2);

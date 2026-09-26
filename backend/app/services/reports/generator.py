@@ -381,8 +381,105 @@ def build_verification_pdf(report_data: Dict[str, Any]) -> io.BytesIO:
         elements.append(t_ev)
         elements.append(Spacer(1, 10))
 
-    # Section 5: Statutory Declarations & Signatures
-    elements.append(Paragraph("5. Statutory Endorsement &amp; Legal Declaration", section_heading))
+    # Section 5: Metrological Fingerprint & Statistical Anomaly Intelligence
+    fp = report_data.get("fingerprint")
+    anom = report_data.get("anomaly")
+    if fp or anom:
+        elements.append(Paragraph("5. Metrological Fingerprint &amp; Statistical Anomaly Intelligence", section_heading))
+        fp_data = []
+        if fp:
+            fp_data.append([
+                Paragraph("<b>Fingerprint SHA-256 Hash:</b>", table_cell_bold),
+                Paragraph(fp.get("fingerprint_hash", "—"), mono_style),
+            ])
+            fp_data.append([
+                Paragraph("<b>Fingerprint Status:</b>", table_cell_bold),
+                Paragraph(f"Active ({fp.get('measurement_count', 0)} readings enrolled, Alg v{fp.get('fingerprint_version', '1.0')})", table_cell),
+            ])
+        if anom:
+            anom_color = "#059669" if anom.get("classification") == "NORMAL" else "#DC2626"
+            fp_data.append([
+                Paragraph("<b>Statistical Anomaly Check:</b>", table_cell_bold),
+                Paragraph(f"<b><font color='{anom_color}'>{anom.get('classification', 'NORMAL')}</font></b> (Score: {anom.get('anomaly_score', 0):.2f}) — {anom.get('summary', 'Normal measurement behaviour')}", table_cell),
+            ])
+        t_fp = Table(fp_data, colWidths=[150, 370])
+        t_fp.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(t_fp)
+        elements.append(Spacer(1, 10))
+
+    # Section 6: Software Verification (if applicable)
+    sw = report_data.get("software_verification")
+    if sw:
+        elements.append(Paragraph("6. WELMEC 7.2 Software Examination Record", section_heading))
+        sw_data = [
+            [
+                Paragraph("<b>Software Name & Version:</b>", table_cell_bold),
+                Paragraph(f"{sw.get('software_id') or sw.get('software_name', '—')} v{sw.get('software_version', '—')}", table_cell),
+                Paragraph("<b>Risk Class:</b>", table_cell_bold),
+                Paragraph(f"Class {sw.get('risk_class', 'C')}", table_cell),
+            ],
+            [
+                Paragraph("<b>Binary Checksum:</b>", table_cell_bold),
+                Paragraph(f"{sw.get('actual_checksum', '—')} ({sw.get('checksum_algorithm', 'SHA-256')})", mono_style),
+                Paragraph("<b>Checksum Verified:</b>", table_cell_bold),
+                Paragraph("YES — Authentic" if sw.get("checksum_verified") else "FAIL", table_cell_bold),
+            ],
+            [
+                Paragraph("<b>WELMEC Compliance:</b>", table_cell_bold),
+                Paragraph(f"<b>{sw.get('overall_compliance', 'PASS')}</b> ({sw.get('welmec_guide', 'WELMEC Guide 7.2')})", table_cell_bold),
+                Paragraph("<b>Examined By:</b>", table_cell_bold),
+                Paragraph(sw.get("verified_by", "—"), table_cell),
+            ],
+        ]
+        t_sw = Table(sw_data, colWidths=[135, 125, 125, 135])
+        t_sw.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(t_sw)
+        elements.append(Spacer(1, 10))
+
+    # Section 7: Cryptographic Audit Trail
+    audits = report_data.get("audit_logs", [])
+    if audits:
+        elements.append(Paragraph("7. Cryptographic Chain of Custody &amp; Audit Log", section_heading))
+        aud_data = [
+            [
+                Paragraph("<b>Timestamp (UTC)</b>", table_cell_bold),
+                Paragraph("<b>Action</b>", table_cell_bold),
+                Paragraph("<b>Officer</b>", table_cell_bold),
+                Paragraph("<b>Details</b>", table_cell_bold),
+            ]
+        ]
+        for a in audits[:5]:
+            ts_str = a.get("timestamp", "")
+            if ts_str and "T" in ts_str:
+                ts_str = ts_str.replace("T", " ")[:19]
+            aud_data.append([
+                Paragraph(ts_str or "—", mono_style),
+                Paragraph(a.get("action", "—"), table_cell_bold),
+                Paragraph(a.get("performed_by", "—"), table_cell),
+                Paragraph(a.get("details", "—")[:40], table_cell),
+            ])
+        t_aud = Table(aud_data, colWidths=[110, 110, 100, 200])
+        t_aud.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#E2E8F0")),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ]))
+        elements.append(t_aud)
+        elements.append(Spacer(1, 10))
+
+    # Section 8: Statutory Declarations & Signatures
+    elements.append(Paragraph("8. Statutory Endorsement &amp; Legal Declaration", section_heading))
     declaration_text = (
         "This official verification certificate confirms that the Non-Automatic Weighing Instrument (NAWI) "
         "identified herein has been tested in accordance with OIML R-76-1:2006 (E) and applicable National Legal Metrology Regulations. "
@@ -488,6 +585,34 @@ def build_verification_docx(report_data: Dict[str, Any]) -> io.BytesIO:
             row_cells[3].text = f"{r.get('error', 0):+.4f} {r.get('unit', '')}"
             row_cells[4].text = f"±{r.get('mpe', 0):.4f} {r.get('unit', '')}"
             row_cells[5].text = str(r.get("result", "PASS"))
+
+    # Section 4: Fingerprint & Statistical Anomaly Check
+    fp = report_data.get("fingerprint")
+    anom = report_data.get("anomaly")
+    if fp or anom:
+        doc.add_heading("4. Metrological Fingerprint & Statistical Anomaly Intelligence", level=2)
+        if fp:
+            doc.add_paragraph(f"Fingerprint SHA-256: {fp.get('fingerprint_hash', '—')}")
+            doc.add_paragraph(f"Status: Active ({fp.get('measurement_count', 0)} readings enrolled, Alg v{fp.get('fingerprint_version', '1.0')})")
+        if anom:
+            doc.add_paragraph(f"Anomaly Classification: {anom.get('classification', 'NORMAL')} (Score: {anom.get('anomaly_score', 0):.2f})")
+            doc.add_paragraph(f"Summary: {anom.get('summary', 'Normal measurement behaviour')}")
+
+    # Section 5: Software Verification
+    sw = report_data.get("software_verification")
+    if sw:
+        doc.add_heading("5. WELMEC 7.2 Software Examination", level=2)
+        doc.add_paragraph(f"Software: {sw.get('software_name', '—')} v{sw.get('software_version', '—')}")
+        doc.add_paragraph(f"Binary Checksum: {sw.get('actual_checksum', '—')} ({sw.get('checksum_algorithm', 'SHA-256')}) — Verified: {sw.get('checksum_verified')}")
+        doc.add_paragraph(f"WELMEC Result: {sw.get('overall_compliance', 'PASS')} ({sw.get('welmec_guide', 'WELMEC Guide 7.2')})")
+
+    # Section 6: Audit Trail
+    audits = report_data.get("audit_logs", [])
+    if audits:
+        doc.add_heading("6. Audit Trail & Cryptographic Chain of Custody", level=2)
+        for a in audits[:5]:
+            ts = (a.get('timestamp') or '')[:19].replace('T', ' ')
+            doc.add_paragraph(f"[{ts}] {a.get('action', '')} by {a.get('performed_by', '')}: {a.get('details', '')}")
 
     doc.save(buffer)
     buffer.seek(0)

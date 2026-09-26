@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { 
   UserProfile, 
@@ -233,8 +233,9 @@ interface VerificationContextType {
   selectInstrument: (instrument: Instrument) => Promise<void>;
   loadSessionReadings: (sessionId?: number) => Promise<ApiReading[]>;
   proceedToStep: (stepNumber: number) => void;
-  selectSession: (sessionCode: string) => Promise<void>;
+  selectSession: (sessionCode: string, targetView?: NavigationKey) => Promise<void>;
   refreshBackendData: () => Promise<void>;
+  switchRole: (role: string) => void;
 }
 
 const VerificationContext = createContext<VerificationContextType | undefined>(undefined);
@@ -296,13 +297,46 @@ function mapApiSessionToFrontend(apiSess: ApiTestSession, instMap: Map<number, I
 }
 
 export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [currentView, setCurrentView] = useState<NavigationKey>('dashboard');
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('nawi_current_user');
+      return saved ? JSON.parse(saved) : mockCurrentUser;
+    } catch {
+      return mockCurrentUser;
+    }
+  });
 
-  // FIXED: Start with null — no default IDs
-  const [activeSessionId, setActiveSessionId] = useState<string>('');
-  const [activeBackendSessionId, setActiveBackendSessionId] = useState<number | null>(null);
+  const [currentView, setCurrentViewState] = useState<NavigationKey>(() => {
+    const saved = sessionStorage.getItem('nawi_current_view');
+    return (saved as NavigationKey) || 'dashboard';
+  });
+
+  // Session persistence across browser reloads
+  const [activeSessionId, setActiveSessionIdState] = useState<string>(() => {
+    return sessionStorage.getItem('nawi_active_session_code') || '';
+  });
+  const [activeBackendSessionId, setActiveBackendSessionIdState] = useState<number | null>(() => {
+    const saved = sessionStorage.getItem('nawi_active_backend_session_id');
+    return saved ? Number(saved) : null;
+  });
   const [activeInstrumentId, setActiveInstrumentId] = useState<number | null>(null);
+
+  const setCurrentView = useCallback((view: NavigationKey) => {
+    setCurrentViewState(view);
+    sessionStorage.setItem('nawi_current_view', view);
+  }, []);
+
+  const setActiveSessionId = useCallback((code: string) => {
+    setActiveSessionIdState(code);
+    if (code) sessionStorage.setItem('nawi_active_session_code', code);
+    else sessionStorage.removeItem('nawi_active_session_code');
+  }, []);
+
+  const setActiveBackendSessionId = useCallback((id: number | null) => {
+    setActiveBackendSessionIdState(id);
+    if (id !== null) sessionStorage.setItem('nawi_active_backend_session_id', String(id));
+    else sessionStorage.removeItem('nawi_active_backend_session_id');
+  }, []);
 
   const [testSessions, setTestSessions] = useState<TestSession[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
@@ -427,26 +461,42 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   }, [refreshBackendData]);
 
   const login = (email: string): boolean => {
-    setCurrentUser({
+    const user: UserProfile = {
       ...mockCurrentUser,
       email: email || 'officer@metrology.gov',
-    });
+    };
+    setCurrentUser(user);
+    sessionStorage.setItem('nawi_current_user', JSON.stringify(user));
     setCurrentView('dashboard');
     return true;
   };
 
   const demoLogin = () => {
     setCurrentUser(mockCurrentUser);
+    sessionStorage.setItem('nawi_current_user', JSON.stringify(mockCurrentUser));
     setCurrentView('dashboard');
   };
 
   const logout = () => {
     setCurrentUser(null);
+    sessionStorage.removeItem('nawi_current_user');
+    sessionStorage.removeItem('nawi_current_view');
+    sessionStorage.removeItem('nawi_active_session_code');
+    sessionStorage.removeItem('nawi_active_backend_session_id');
     setActiveSessionId('');
     setActiveBackendSessionId(null);
     setActiveInstrumentId(null);
     setDraftSession(blankDraftData);
   };
+
+  const switchRole = useCallback((role: string) => {
+    setCurrentUser(prev => {
+      if (!prev) return null;
+      const updated: UserProfile = { ...prev, role: role as any };
+      sessionStorage.setItem('nawi_current_user', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
   // useCallback with empty deps: this only ever uses the functional setState
   // form, so it never needs to close over `draftSession`. Keeping it referentially
@@ -683,7 +733,7 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   };
 
   // FIXED: selectSession properly fetches the session by code from the backend API
-  const selectSession = async (sessionCode: string) => {
+  const selectSession = async (sessionCode: string, targetView?: NavigationKey) => {
     setActiveSessionId(sessionCode);
 
     try {
@@ -700,6 +750,25 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         instData = await instrumentsApi.getById(apiSession.instrument_id);
       } catch {
         // ignore if instrument fetch fails
+      }
+
+      // Fetch session readings so observations table has the real measurements
+      let sessionPoints: StaticWeighingPoint[] = defaultDemoStaticPoints;
+      try {
+        const readings = await readingsApi.getSessionReadings(apiSession.id);
+        if (readings && readings.length > 0) {
+          sessionPoints = readings.map((r, idx) => ({
+            id: `db_rd_${r.id}`,
+            pointNumber: idx + 1,
+            appliedLoad: String(r.reference_value),
+            indication: String(r.indicated_value),
+            additionalLoadDeltaL: '0.05',
+            zeroErrorE0: '0.00',
+            isDemo: false,
+          }));
+        }
+      } catch {
+        // ignore
       }
 
       const draft: DraftFormData = {
@@ -730,10 +799,15 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         sessionId: apiSession.session_code,
         backendSessionId: apiSession.id,
         backendInstrumentId: apiSession.instrument_id,
+        staticWeighingPoints: sessionPoints,
       };
 
       setDraftSession(draft);
-      setCurrentView('new-test-session');
+      if (targetView) {
+        setCurrentView(targetView);
+      } else {
+        setCurrentView('new-test-session');
+      }
     } catch (err) {
       console.warn('Could not load session from backend:', err);
       // Fallback: search local testSessions array
@@ -760,10 +834,23 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
           backendSessionId: null,
           backendInstrumentId: parseInt(existing.instrumentId, 10) || null,
         }));
-        setCurrentView('new-test-session');
+        if (targetView) {
+          setCurrentView(targetView);
+        } else {
+          setCurrentView('new-test-session');
+        }
       }
     }
   };
+
+  // Restore active session data on page reload if an active session code was saved
+  const initialSessionRestored = useRef(false);
+  useEffect(() => {
+    if (backendConnected && activeSessionId && !initialSessionRestored.current) {
+      initialSessionRestored.current = true;
+      selectSession(activeSessionId, currentView);
+    }
+  }, [backendConnected, activeSessionId, currentView]);
 
   return (
     <VerificationContext.Provider
@@ -797,6 +884,7 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         proceedToStep,
         selectSession,
         refreshBackendData,
+        switchRole,
       }}
     >
       {children}

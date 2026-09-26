@@ -10,11 +10,14 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.anomaly_result import AnomalyResult
 from app.models.audit_log import AuditLog
 from app.models.compliance import ComplianceResult
 from app.models.evidence import EvidenceItem
+from app.models.fingerprint import MetrologicalFingerprint
 from app.models.instrument import Instrument
 from app.models.reading import Reading
+from app.models.software_verification import SoftwareVerification
 from app.models.test_session import TestSession
 from app.services.reports.generator import build_verification_docx, build_verification_pdf
 
@@ -95,6 +98,72 @@ def _assemble_session_report_data(session_id: int, db: Session) -> Dict[str, Any
         for ev in evidence_items
     ]
 
+    # Query fingerprint, anomaly, software verification, and audit records
+    fingerprint = db.query(MetrologicalFingerprint).filter(MetrologicalFingerprint.session_id == session_id).first()
+    anomaly = db.query(AnomalyResult).filter(AnomalyResult.session_id == session_id).first()
+    software_ver = db.query(SoftwareVerification).filter(SoftwareVerification.session_id == session_id).first()
+    audit_logs = (
+        db.query(AuditLog)
+        .filter(AuditLog.session_id == session.id)
+        .order_by(AuditLog.timestamp.desc())
+        .limit(10)
+        .all()
+    )
+
+    fingerprint_data = None
+    if fingerprint:
+        fingerprint_data = {
+            "fingerprint_hash": fingerprint.fingerprint_hash,
+            "measurement_count": fingerprint.measurement_count,
+            "fingerprint_version": fingerprint.fingerprint_version,
+            "created_at": fingerprint.created_at.isoformat() if fingerprint.created_at else None,
+        }
+
+    anomaly_data = None
+    if anomaly:
+        flags_parsed = []
+        if getattr(anomaly, "flags_json", None):
+            try:
+                import json
+                flags_parsed = json.loads(anomaly.flags_json)
+            except Exception:
+                flags_parsed = []
+        anomaly_data = {
+            "anomaly_score": anomaly.anomaly_score,
+            "classification": anomaly.classification,
+            "detection_method": anomaly.detection_method or "Statistical Anomaly Detection",
+            "summary": anomaly.summary,
+            "flags": flags_parsed,
+        }
+
+    software_data = None
+    if software_ver:
+        software_data = {
+            "software_id": software_ver.software_id,
+            "software_version": software_ver.software_version,
+            "firmware_version": software_ver.firmware_version,
+            "checksum_algorithm": software_ver.hash_algorithm or "SHA-256",
+            "actual_checksum": software_ver.checksum_hash,
+            "expected_checksum": software_ver.baseline_hash,
+            "checksum_verified": (
+                software_ver.checksum_hash == software_ver.baseline_hash
+                if (software_ver.checksum_hash and software_ver.baseline_hash)
+                else (software_ver.status == "PASS")
+            ),
+            "overall_compliance": software_ver.status,
+            "applicability": software_ver.applicability,
+        }
+
+    audit_data = [
+        {
+            "action": a.action,
+            "performed_by": a.performed_by,
+            "timestamp": a.timestamp.isoformat() if a.timestamp else None,
+            "details": a.details,
+        }
+        for a in audit_logs
+    ]
+
     report_payload = {
         "session_id": session.id,
         "session_code": session.session_code,
@@ -113,6 +182,10 @@ def _assemble_session_report_data(session_id: int, db: Session) -> Dict[str, Any
         "instrument": inst_data,
         "readings": readings_data,
         "evidence_items": evidence_data,
+        "fingerprint": fingerprint_data,
+        "anomaly": anomaly_data,
+        "software_verification": software_data,
+        "audit_logs": audit_data,
         "created_at": session.created_at.isoformat() if session.created_at else None,
     }
 

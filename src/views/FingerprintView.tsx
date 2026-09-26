@@ -151,7 +151,7 @@ const Sparkline: React.FC<{ stored: number[]; current: number[]; mismatch: boole
 };
 
 export const FingerprintView: React.FC = () => {
-  const { draftSession, instruments, backendConnected } = useVerification();
+  const { draftSession, instruments, backendConnected, activeBackendSessionId } = useVerification();
   const [mode, setMode] = useState<Mode>('VERIFY');
 
   // --- Instrument selection (Fix 1a) ---
@@ -242,10 +242,10 @@ export const FingerprintView: React.FC = () => {
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
       setInstrumentSessions(matching);
-      const defaultSession = matching[0] || null;
+      const targetSession = (activeBackendSessionId ? matching.find(s => s.id === activeBackendSessionId) : null) || matching[0] || null;
 
-      if (defaultSession) {
-        await loadSessionData(defaultSession, instrument);
+      if (targetSession) {
+        await loadSessionData(targetSession, instrument);
       }
     } catch (err) {
       console.warn('Fingerprint: could not load instrument session context, falling back to demo mode:', err);

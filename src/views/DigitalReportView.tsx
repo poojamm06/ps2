@@ -291,18 +291,83 @@ export const DigitalReportView: React.FC = () => {
             </div>
           )}
 
+          {/* Metrological Fingerprint & Statistical Anomaly Summary */}
+          {(reportData?.fingerprint || reportData?.anomaly) && (
+            <div className="p-space-md rounded-lg bg-surface-container-low border border-outline-variant/20">
+              <div className="font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider font-semibold mb-space-sm">
+                METROLOGICAL FINGERPRINT &amp; STATISTICAL ANOMALY INTELLIGENCE
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-space-md">
+                {reportData?.fingerprint && (
+                  <div className="p-space-sm rounded-lg bg-surface-container border border-outline-variant/20 space-y-1">
+                    <span className="text-[11px] font-semibold text-primary block">Metrological Fingerprint Enrolment</span>
+                    <div className="metrology-mono text-[11px] text-on-surface break-all">
+                      SHA-256: 0x{reportData.fingerprint.fingerprint_hash}
+                    </div>
+                    <div className="text-[11px] text-outline">
+                      {reportData.fingerprint.measurement_count} real test readings enrolled (Alg v{reportData.fingerprint.fingerprint_version || '1.0'})
+                    </div>
+                  </div>
+                )}
+                {reportData?.anomaly && (
+                  <div className="p-space-sm rounded-lg bg-surface-container border border-outline-variant/20 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-primary">Statistical Anomaly Check</span>
+                      <span className={reportData.anomaly.classification === 'NORMAL' ? 'badge-pass text-[10px]' : 'badge-fail text-[10px]'}>
+                        {reportData.anomaly.classification}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-on-surface">
+                      Score: <strong className="metrology-mono">{Number(reportData.anomaly.anomaly_score).toFixed(2)}</strong> — {reportData.anomaly.summary}
+                    </div>
+                    <div className="text-[10px] text-outline font-label-mono-sm">
+                      Engine: {reportData.anomaly.detection_method || 'Statistical Anomaly Detection'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Software Examination Summary */}
+          {reportData?.software_verification && (
+            <div className="p-space-md rounded-lg bg-surface-container-low border border-outline-variant/20">
+              <div className="font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider font-semibold mb-space-sm">
+                WELMEC 7.2 STATUTORY SOFTWARE EXAMINATION
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-sm text-xs">
+                <div>
+                  <span className="text-outline block">Software ID</span>
+                  <span className="font-semibold text-on-surface">{reportData.software_verification.software_name} v{reportData.software_verification.software_version}</span>
+                </div>
+                <div>
+                  <span className="text-outline block">Binary Integrity Checksum</span>
+                  <span className="metrology-mono text-[11px] truncate block" title={reportData.software_verification.actual_checksum}>
+                    {reportData.software_verification.actual_checksum?.substring(0, 16)}...
+                  </span>
+                </div>
+                <div>
+                  <span className="text-outline block">WELMEC Evaluation</span>
+                  <span className="badge-pass text-[10px]">{reportData.software_verification.overall_compliance} (Class {reportData.software_verification.risk_class})</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Cryptographic Anchor */}
           <div className="p-space-md rounded-lg bg-primary-container border border-primary/30 flex flex-col sm:flex-row items-center justify-between gap-space-md">
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-on-primary text-[24px]">enhanced_encryption</span>
               <div>
                 <div className="font-label-mono-sm text-label-mono-sm text-on-primary-container uppercase tracking-wider">Cryptographic Anchor (SHA-256 Immutable)</div>
-                <div className="metrology-mono text-on-primary font-bold text-[13px] mt-0.5">
-                  0x7c98e1b54a3901f4c7811d390a...{draftSession.sessionId.slice(-6)}
+                <div className="metrology-mono text-on-primary font-bold text-[12px] mt-0.5 break-all">
+                  {reportData?.fingerprint?.fingerprint_hash
+                    ? `0x${reportData.fingerprint.fingerprint_hash}`
+                    : `0x7c98e1b54a3901f4c7811d390a...${draftSession.sessionId.slice(-6)}`}
                 </div>
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-right flex-shrink-0">
               <div className="font-label-mono-sm text-label-mono-sm text-on-primary-container">PostgreSQL State Sync</div>
               <div className="metrology-mono text-on-primary font-bold text-[12px]">PERSISTED &amp; VERIFIED</div>
             </div>

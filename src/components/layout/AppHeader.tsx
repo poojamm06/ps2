@@ -2,7 +2,17 @@ import React, { useState } from 'react';
 import { useVerification } from '../../context/VerificationContext';
 
 export const AppHeader: React.FC = () => {
-  const { currentUser, logout, anomalyAlerts, setCurrentView, currentView, draftSession, backendConnected, databaseConnected } = useVerification();
+  const { 
+    currentUser, 
+    logout, 
+    anomalyAlerts, 
+    setCurrentView, 
+    currentView, 
+    draftSession, 
+    backendConnected, 
+    databaseConnected,
+    switchRole,
+  } = useVerification();
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
 
@@ -141,8 +151,24 @@ export const AppHeader: React.FC = () => {
                 <div className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">{currentUser?.badgeNumber}</div>
                 <div className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">{currentUser?.station}</div>
               </div>
+              <div className="p-space-xs border-b border-outline-variant/30">
+                <div className="px-3 pt-1 pb-0.5 font-label-mono-sm text-[10px] text-outline uppercase font-bold">
+                  Inspector Role (RBAC)
+                </div>
+                <div className="px-2 py-1">
+                  <select
+                    value={currentUser?.role || 'Legal Metrology Officer'}
+                    onChange={(e) => switchRole(e.target.value)}
+                    className="w-full text-xs font-semibold rounded-lg bg-surface-container border border-outline-variant/40 px-2 py-1.5 text-primary focus:outline-none cursor-pointer"
+                  >
+                    <option value="Legal Metrology Officer">Legal Metrology Officer</option>
+                    <option value="Senior Metrologist">Senior Metrologist</option>
+                    <option value="Technical Auditor">Technical Auditor</option>
+                  </select>
+                </div>
+              </div>
               <div className="p-space-xs">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-on-surface-variant font-body-md text-body-md">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-on-surface-variant font-body-sm text-[12px]">
                   <span className="material-symbols-outlined text-[16px] text-primary">verified_user</span>
                   NLMA Compliance Authority
                 </div>
