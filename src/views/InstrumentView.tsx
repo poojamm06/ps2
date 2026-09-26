@@ -4,6 +4,40 @@ import { instrumentsApi, type ApiInstrumentCreate } from '../services/api';
 import { mockInstruments } from '../mock/mockData';
 import type { Instrument } from '../types';
 
+// Numeric fields are kept as raw strings while editing (never coerced to a
+// number mid-keystroke) so the field never silently snaps back to a default
+// value while the user is typing or backspacing — that snap-back was forcing
+// a re-click to keep editing. Parsed to numbers only on submit.
+interface RegisterFormState {
+  manufacturer: string;
+  model: string;
+  serial_number: string;
+  functional_type: string;
+  accuracy_class: string;
+  max_capacity: string;
+  min_capacity: string;
+  unit: string;
+  verification_scale_interval_e: string;
+  actual_scale_interval_d: string;
+  software_applicable: boolean;
+  approval_certificate_number: string;
+}
+
+const blankRegisterForm: RegisterFormState = {
+  manufacturer: '',
+  model: '',
+  serial_number: '',
+  functional_type: '',
+  accuracy_class: '',
+  max_capacity: '',
+  min_capacity: '',
+  unit: 'g',
+  verification_scale_interval_e: '',
+  actual_scale_interval_d: '',
+  software_applicable: false,
+  approval_certificate_number: '',
+};
+
 const MANUFACTURERS = [
   'RADWAG',
   'Mettler-Toledo Inc.',
@@ -52,20 +86,7 @@ export const InstrumentView: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
-  const [newForm, setNewForm] = useState<ApiInstrumentCreate>({
-    manufacturer: 'RADWAG',
-    model: 'PS 2100.R2',
-    serial_number: '',
-    functional_type: 'High-Precision Analytical Balance',
-    accuracy_class: 'Class II',
-    max_capacity: 2100,
-    min_capacity: 0.5,
-    unit: 'g',
-    verification_scale_interval_e: 0.1,
-    actual_scale_interval_d: 0.01,
-    software_applicable: false,
-    approval_certificate_number: 'OIML-R76-2026-CERT',
-  });
+  const [newForm, setNewForm] = useState<RegisterFormState>(blankRegisterForm);
 
   // Demo-safety net: fall back to rich mock inventory when the backend is offline,
   // always including anything registered locally this session.
@@ -100,13 +121,30 @@ export const InstrumentView: React.FC = () => {
 
   const toggleRegisterForm = () => {
     setErrorMsg(null);
-    setShowRegisterForm(v => !v);
+    setShowRegisterForm(v => {
+      const opening = !v;
+      if (opening) setNewForm(blankRegisterForm);
+      return opening;
+    });
   };
 
   const handleRegisterNew = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newForm.serial_number.trim()) {
       setErrorMsg('Serial number is required.');
+      return;
+    }
+    if (!newForm.manufacturer || !newForm.functional_type || !newForm.accuracy_class) {
+      setErrorMsg('Please select a manufacturer, functional type, and accuracy class.');
+      return;
+    }
+
+    const maxCap = parseFloat(newForm.max_capacity);
+    const minCap = parseFloat(newForm.min_capacity);
+    const eVal = parseFloat(newForm.verification_scale_interval_e);
+    const dVal = parseFloat(newForm.actual_scale_interval_d);
+    if ([maxCap, minCap, eVal, dVal].some(v => isNaN(v))) {
+      setErrorMsg('Please enter valid numeric values for Max, Min, e, and d.');
       return;
     }
 
@@ -117,12 +155,24 @@ export const InstrumentView: React.FC = () => {
       ? newForm.accuracy_class
       : `Class ${newForm.accuracy_class}`;
 
+    const payload: ApiInstrumentCreate = {
+      manufacturer: newForm.manufacturer,
+      model: newForm.model,
+      serial_number: newForm.serial_number,
+      functional_type: newForm.functional_type,
+      accuracy_class: normalizedClass,
+      max_capacity: maxCap,
+      min_capacity: minCap,
+      unit: newForm.unit,
+      verification_scale_interval_e: eVal,
+      actual_scale_interval_d: dVal,
+      software_applicable: newForm.software_applicable,
+      approval_certificate_number: newForm.approval_certificate_number || undefined,
+    };
+
     try {
       // Real backend first.
-      const created = await instrumentsApi.createInstrument({
-        ...newForm,
-        accuracy_class: normalizedClass,
-      });
+      const created = await instrumentsApi.createInstrument(payload);
 
       await refreshBackendData();
       setShowRegisterForm(false);
@@ -159,11 +209,11 @@ export const InstrumentView: React.FC = () => {
         manufacturer: newForm.manufacturer,
         model: newForm.model,
         accuracyClass: (normalizedClass.replace(/^Class\s+/i, '').trim() || 'II') as any,
-        maxCapacity: newForm.max_capacity,
-        minCapacity: newForm.min_capacity,
+        maxCapacity: maxCap,
+        minCapacity: minCap,
         unit: (newForm.unit || 'g') as any,
-        verificationScaleInterval_e: newForm.verification_scale_interval_e,
-        actualScaleInterval_d: newForm.actual_scale_interval_d,
+        verificationScaleInterval_e: eVal,
+        actualScaleInterval_d: dVal,
         instrumentType: newForm.functional_type as any,
         softwareApplicable: newForm.software_applicable ?? false,
         approvalCertificateNumber: newForm.approval_certificate_number || undefined,
@@ -264,10 +314,12 @@ export const InstrumentView: React.FC = () => {
                 <div>
                   <label className={fieldLabel}>Manufacturer</label>
                   <select
+                    required
                     value={newForm.manufacturer}
                     onChange={(e) => setNewForm({ ...newForm, manufacturer: e.target.value })}
                     className="nawi-select"
                   >
+                    <option value="" disabled>Select manufacturer…</option>
                     {MANUFACTURERS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
@@ -299,10 +351,12 @@ export const InstrumentView: React.FC = () => {
                 <div>
                   <label className={fieldLabel}>Functional Type</label>
                   <select
+                    required
                     value={newForm.functional_type}
                     onChange={(e) => setNewForm({ ...newForm, functional_type: e.target.value })}
                     className="nawi-select"
                   >
+                    <option value="" disabled>Select functional type…</option>
                     {INSTRUMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
@@ -319,10 +373,12 @@ export const InstrumentView: React.FC = () => {
                 <div>
                   <label className={fieldLabel}>Accuracy Class (OIML R-76)</label>
                   <select
+                    required
                     value={newForm.accuracy_class}
                     onChange={(e) => setNewForm({ ...newForm, accuracy_class: e.target.value })}
                     className="nawi-select"
                   >
+                    <option value="" disabled>Select accuracy class…</option>
                     <option value="Class I">Class I (Special Accuracy)</option>
                     <option value="Class II">Class II (High Accuracy)</option>
                     <option value="Class III">Class III (Medium Accuracy)</option>
@@ -350,8 +406,9 @@ export const InstrumentView: React.FC = () => {
                     type="number"
                     step="any"
                     required
+                    placeholder="e.g. 2100"
                     value={newForm.max_capacity}
-                    onChange={(e) => setNewForm({ ...newForm, max_capacity: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setNewForm({ ...newForm, max_capacity: e.target.value })}
                     className={`${fieldInput} metrology-mono`}
                   />
                 </div>
@@ -362,8 +419,9 @@ export const InstrumentView: React.FC = () => {
                     type="number"
                     step="any"
                     required
+                    placeholder="e.g. 0.5"
                     value={newForm.min_capacity}
-                    onChange={(e) => setNewForm({ ...newForm, min_capacity: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setNewForm({ ...newForm, min_capacity: e.target.value })}
                     className={`${fieldInput} metrology-mono`}
                   />
                 </div>
@@ -374,8 +432,9 @@ export const InstrumentView: React.FC = () => {
                     type="number"
                     step="any"
                     required
+                    placeholder="e.g. 0.1"
                     value={newForm.verification_scale_interval_e}
-                    onChange={(e) => setNewForm({ ...newForm, verification_scale_interval_e: parseFloat(e.target.value) || 0.1 })}
+                    onChange={(e) => setNewForm({ ...newForm, verification_scale_interval_e: e.target.value })}
                     className={`${fieldInput} metrology-mono`}
                   />
                 </div>
@@ -386,8 +445,9 @@ export const InstrumentView: React.FC = () => {
                     type="number"
                     step="any"
                     required
+                    placeholder="e.g. 0.01"
                     value={newForm.actual_scale_interval_d}
-                    onChange={(e) => setNewForm({ ...newForm, actual_scale_interval_d: parseFloat(e.target.value) || 0.01 })}
+                    onChange={(e) => setNewForm({ ...newForm, actual_scale_interval_d: e.target.value })}
                     className={`${fieldInput} metrology-mono`}
                   />
                 </div>

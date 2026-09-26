@@ -14,18 +14,27 @@ import {
 } from 'chart.js';
 import { Line, Radar } from 'react-chartjs-2';
 import { fingerprintScenarios, type FingerprintScenario } from '../mock/uvpMockData';
-import { fingerprintIdentityApi, type FingerprintIdentityResult } from '../services/api';
+import {
+  fingerprintIdentityApi,
+  sessionsApi,
+  readingsApi,
+  type FingerprintIdentityResult,
+  type ApiTestSession,
+  type ApiReading,
+} from '../services/api';
+import type { Instrument } from '../types';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ChartTitle, ChartTooltip, Legend, Filler, RadialLinearScale);
 
 type Mode = 'ENROL' | 'VERIFY';
 type Scenario = 'genuine' | 'swapped';
+type RealStatus = 'no_backend' | 'no_instrument' | 'loading' | 'no_session' | 'not_enrolled' | 'ready';
 
 // Real backend first, deterministic mock fallback on failure. Maps the backend's
-// /fingerprint/demo-scenarios/{id}/verify response onto the same shape the mock
-// data uses, so the rest of this view doesn't need to know which source it came
-// from.
-const apiResultToScenario = (api: FingerprintIdentityResult, scenario: Scenario, mockFallback: FingerprintScenario): FingerprintScenario => {
+// /fingerprint/verify or /fingerprint/demo-scenarios/{id}/verify response onto the
+// same shape the mock data uses, so the rest of this view doesn't need to know
+// which source it came from.
+const apiResultToScenario = (api: FingerprintIdentityResult, tag: string, mockFallback: FingerprintScenario): FingerprintScenario => {
   const normalize = (arr: number[]): number[] => {
     if (arr.length === 0) return [0, 0];
     const max = Math.max(...arr, 0.001);
@@ -49,7 +58,7 @@ const apiResultToScenario = (api: FingerprintIdentityResult, scenario: Scenario,
   const eccMeanCurrent = mean(current.eccentricity_pattern);
 
   return {
-    id: scenario,
+    id: tag as any,
     label: api.label || mockFallback.label,
     instrumentSerial: api.instrument_serial,
     model: api.model,
@@ -140,65 +149,183 @@ const Sparkline: React.FC<{ stored: number[]; current: number[]; mismatch: boole
 };
 
 export const FingerprintView: React.FC = () => {
-  const { draftSession, activeBackendSessionId } = useVerification();
+  const { draftSession, instruments, backendConnected } = useVerification();
   const [mode, setMode] = useState<Mode>('VERIFY');
-  const [scenario, setScenario] = useState<Scenario>('genuine');
-  const [sealed, setSealed] = useState(false);
-  const [sealing, setSealing] = useState(false);
-  const [checking, setChecking] = useState(false);
-  const [enrolResult, setEnrolResult] = useState<{ hash: string; count: number } | null>(null);
-  const [liveScenario, setLiveScenario] = useState<FingerprintScenario | null>(null);
-  const [isLive, setIsLive] = useState(false);
 
-  const mockFp = fingerprintScenarios[scenario];
-  const fp = liveScenario || mockFp;
-  const isMatch = fp.result === 'MATCH';
+  // --- Instrument selection (Fix 1a) ---
+  const [selectedInstrumentId, setSelectedInstrumentId] = useState<string>('');
 
-  const runVerification = useCallback(async (targetScenario: Scenario) => {
-    setChecking(true);
+  useEffect(() => {
+    if (!selectedInstrumentId && instruments.length > 0) {
+      const draftMatch = instruments.find(i => i.serialNumber === draftSession.serialNumber);
+      setSelectedInstrumentId((draftMatch || instruments[0]).id);
+    }
+  }, [instruments, draftSession.serialNumber, selectedInstrumentId]);
+
+  const selectedInstrument: Instrument | undefined = useMemo(
+    () => instruments.find(i => i.id === selectedInstrumentId) || instruments[0],
+    [instruments, selectedInstrumentId]
+  );
+
+  // --- Real per-instrument session/fingerprint context (Fix 1b/1c) ---
+  const [latestSession, setLatestSession] = useState<ApiTestSession | null>(null);
+  const [latestReadings, setLatestReadings] = useState<ApiReading[]>([]);
+  const [loadingInstrumentData, setLoadingInstrumentData] = useState(false);
+  const [hasFingerprint, setHasFingerprint] = useState<boolean | null>(null);
+  const [realVerifyResult, setRealVerifyResult] = useState<FingerprintIdentityResult | null>(null);
+  const [realChecking, setRealChecking] = useState(false);
+
+  const loadInstrumentContext = useCallback(async (instrument: Instrument) => {
+    setLoadingInstrumentData(true);
+    setLatestSession(null);
+    setLatestReadings([]);
+    setHasFingerprint(null);
+    setRealVerifyResult(null);
     try {
-      // Real backend first — deterministic demo scenario computed server-side.
-      const apiResult = await fingerprintIdentityApi.runDemoScenario(targetScenario);
-      setLiveScenario(apiResultToScenario(apiResult, targetScenario, fingerprintScenarios[targetScenario]));
-      setIsLive(true);
+      const allSessions = await sessionsApi.getSessions();
+      const instrumentIdNum = Number(instrument.id);
+      const matching = allSessions
+        .filter(s => s.instrument_id === instrumentIdNum)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const latest = matching[0] || null;
+      setLatestSession(latest);
+
+      if (latest) {
+        const readings = await readingsApi.getSessionReadings(latest.id);
+        setLatestReadings(readings);
+
+        if (readings.length >= 1) {
+          try {
+            const subset = readings.slice(0, 3).map(r => ({
+              test_point: r.test_point,
+              reference_value: r.reference_value,
+              indicated_value: r.indicated_value,
+            }));
+            const result = await fingerprintIdentityApi.verify(instrument.serialNumber, subset);
+            setHasFingerprint(true);
+            setRealVerifyResult(result);
+          } catch (err: any) {
+            if (String(err?.message || '').toLowerCase().includes('no enrolled')) {
+              setHasFingerprint(false);
+            } else {
+              setHasFingerprint(null);
+            }
+          }
+        } else {
+          setHasFingerprint(false);
+        }
+      }
     } catch (err) {
-      console.warn('Fingerprint verify backend unavailable, using mock scenario:', err);
-      setLiveScenario(null);
-      setIsLive(false);
+      console.warn('Fingerprint: could not load instrument session context, falling back to demo mode:', err);
     } finally {
-      setChecking(false);
+      setLoadingInstrumentData(false);
     }
   }, []);
 
   useEffect(() => {
-    if (mode === 'VERIFY') {
-      runVerification(scenario);
+    if (selectedInstrument && backendConnected) {
+      loadInstrumentContext(selectedInstrument);
     }
-  }, [mode, scenario, runVerification]);
+  }, [selectedInstrument, backendConnected, loadInstrumentContext]);
+
+  const realStatus: RealStatus = !backendConnected
+    ? 'no_backend'
+    : !selectedInstrument
+    ? 'no_instrument'
+    : loadingInstrumentData
+    ? 'loading'
+    : !latestSession
+    ? 'no_session'
+    : hasFingerprint === false
+    ? 'not_enrolled'
+    : hasFingerprint === true && realVerifyResult
+    ? 'ready'
+    : 'no_backend';
+
+  const handleRunRealVerify = async () => {
+    if (!selectedInstrument || latestReadings.length === 0) return;
+    setRealChecking(true);
+    try {
+      const subset = latestReadings.slice(0, 3).map(r => ({
+        test_point: r.test_point,
+        reference_value: r.reference_value,
+        indicated_value: r.indicated_value,
+      }));
+      const result = await fingerprintIdentityApi.verify(selectedInstrument.serialNumber, subset);
+      setHasFingerprint(true);
+      setRealVerifyResult(result);
+    } catch (err) {
+      console.warn('Re-run verification failed:', err);
+    } finally {
+      setRealChecking(false);
+    }
+  };
+
+  // --- Enrolment (Fix 1b) ---
+  const [sealed, setSealed] = useState(false);
+  const [sealing, setSealing] = useState(false);
+  const [enrolResult, setEnrolResult] = useState<{ hash: string; count: number } | null>(null);
+
+  useEffect(() => {
+    // Reset the enrolment success banner when the selected instrument changes.
+    setSealed(false);
+    setEnrolResult(null);
+  }, [selectedInstrumentId]);
+
+  const canEnrol = realStatus === 'not_enrolled' && !!latestSession && latestReadings.length >= 2;
 
   const handleEnrol = async () => {
+    if (!latestSession) return;
     setSealing(true);
-    if (activeBackendSessionId) {
-      try {
-        const result = await fingerprintIdentityApi.enrol(activeBackendSessionId);
-        setEnrolResult({ hash: result.fingerprint_hash, count: result.measurement_count });
-        setSealing(false);
-        setSealed(true);
-        return;
-      } catch (err) {
-        console.warn('Fingerprint enrol backend unavailable, using mock baseline:', err);
-      }
-    }
-    // Deterministic mock fallback — no active backend session to enrol from.
-    setTimeout(() => {
-      setSealing(false);
+    try {
+      const result = await fingerprintIdentityApi.enrol(latestSession.id);
+      setEnrolResult({ hash: result.fingerprint_hash, count: result.measurement_count });
       setSealed(true);
-    }, 1100);
+      setHasFingerprint(true);
+      // Immediately surface a real comparison now that a baseline exists.
+      await handleRunRealVerify();
+    } catch (err) {
+      console.warn('Fingerprint enrol backend unavailable, using mock baseline:', err);
+      setTimeout(() => setSealed(true), 800);
+    } finally {
+      setSealing(false);
+    }
   };
 
-  const handleRunVerify = () => {
-    runVerification(scenario);
-  };
+  // --- Demo Simulation (Fix 1d) — kept, moved to its own section ---
+  const [demoScenario, setDemoScenario] = useState<Scenario>('genuine');
+  const [demoChecking, setDemoChecking] = useState(false);
+  const [demoLiveScenario, setDemoLiveScenario] = useState<FingerprintScenario | null>(null);
+  const [demoIsLive, setDemoIsLive] = useState(false);
+  const [demoRun, setDemoRun] = useState(false);
+
+  const runDemoScenario = useCallback(async (targetScenario: Scenario) => {
+    setDemoChecking(true);
+    try {
+      const apiResult = await fingerprintIdentityApi.runDemoScenario(targetScenario);
+      setDemoLiveScenario(apiResultToScenario(apiResult, targetScenario, fingerprintScenarios[targetScenario]));
+      setDemoIsLive(true);
+    } catch (err) {
+      console.warn('Fingerprint demo scenario backend unavailable, using mock scenario:', err);
+      setDemoLiveScenario(null);
+      setDemoIsLive(false);
+    } finally {
+      setDemoChecking(false);
+      setDemoRun(true);
+    }
+  }, []);
+
+  const demoFp = demoLiveScenario || fingerprintScenarios[demoScenario];
+  const demoIsMatch = demoFp.result === 'MATCH';
+
+  // --- Which dataset drives the main ENROL/VERIFY visualisation ---
+  const usingRealData = mode === 'VERIFY' && realStatus === 'ready';
+  const fp: FingerprintScenario = usingRealData && realVerifyResult
+    ? apiResultToScenario(realVerifyResult, 'real', fingerprintScenarios.genuine)
+    : realStatus === 'no_backend'
+    ? (demoLiveScenario || fingerprintScenarios[demoScenario])
+    : fingerprintScenarios[demoScenario];
+  const isMatch = fp.result === 'MATCH';
 
   const overlayData = useMemo(() => ({
     labels: fp.curveLabels,
@@ -287,8 +414,56 @@ export const FingerprintView: React.FC = () => {
   const needleAngle = -90 + gaugePct * 180;
   const thresholdAngle = -90 + Math.min(1, fp.threshold / gaugeMax) * 180;
 
+  if (instruments.length === 0) {
+    return (
+      <div className="fade-in space-y-space-md">
+        <section className="bg-surface-container-lowest p-space-lg rounded-xl shadow-card text-center space-y-space-sm">
+          <span className="material-symbols-outlined text-[40px] text-outline">fingerprint</span>
+          <h1 className="font-headline-sm text-headline-sm text-primary font-bold">No Instruments Registered</h1>
+          <p className="font-body-md text-body-md text-on-surface-variant">Register an instrument first to enrol or verify a metrological fingerprint.</p>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="fade-in space-y-space-md">
+      {/* Instrument Selector (Fix 1a) */}
+      <section className="bg-surface-container-lowest p-space-lg rounded-xl shadow-card space-y-space-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-space-sm">
+          <label className="font-label-mono-sm text-label-mono-sm text-outline uppercase tracking-wider flex-shrink-0">
+            Instrument
+          </label>
+          <select
+            value={selectedInstrument?.id || ''}
+            onChange={(e) => setSelectedInstrumentId(e.target.value)}
+            className="flex-1 bg-surface-container-low border border-outline-variant/30 rounded-lg px-3 py-2 font-body-md text-body-md text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
+          >
+            {instruments.map(inst => (
+              <option key={inst.id} value={inst.id}>
+                {inst.manufacturer} {inst.model} — S/N: {inst.serialNumber} — Class {inst.accuracyClass}
+              </option>
+            ))}
+          </select>
+        </div>
+        {selectedInstrument && (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-space-sm">
+            {[
+              { label: 'Max', value: `${selectedInstrument.maxCapacity} ${selectedInstrument.unit}` },
+              { label: 'Min', value: `${selectedInstrument.minCapacity} ${selectedInstrument.unit}` },
+              { label: 'e', value: `${selectedInstrument.verificationScaleInterval_e} ${selectedInstrument.unit}` },
+              { label: 'd', value: `${selectedInstrument.actualScaleInterval_d} ${selectedInstrument.unit}` },
+              { label: 'Class', value: selectedInstrument.accuracyClass },
+            ].map(spec => (
+              <div key={spec.label} className="bg-surface-container-low rounded-lg px-space-sm py-1.5 text-center">
+                <div className="font-label-mono-sm text-[10px] text-outline uppercase tracking-wider">{spec.label}</div>
+                <div className="metrology-mono text-sm font-bold text-primary">{spec.value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* Header */}
       <section className="bg-surface-container-lowest p-space-lg rounded-xl shadow-card space-y-space-md">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-space-md">
@@ -298,10 +473,7 @@ export const FingerprintView: React.FC = () => {
                 UVP 1 // INSTRUMENT IDENTITY VERIFICATION
               </span>
               <span className="px-2 py-0.5 rounded bg-secondary-fixed text-on-secondary-fixed font-label-mono-sm text-label-mono-sm font-semibold uppercase">
-                S/N: {fp.instrumentSerial}
-              </span>
-              <span className="px-2 py-0.5 rounded bg-surface-container-low text-on-surface-variant font-label-mono-sm text-label-mono-sm">
-                CERT: {fp.enrolmentCertificate}
+                S/N: {selectedInstrument?.serialNumber || fp.instrumentSerial}
               </span>
             </div>
             <h1 className="font-display-md text-display-md text-primary tracking-tight">
@@ -310,9 +482,6 @@ export const FingerprintView: React.FC = () => {
             <p className="font-body-md text-body-md text-on-surface-variant max-w-3xl">
               Every load-cell assembly behaves slightly differently because of unavoidable manufacturing variation.
               We treat that behaviour as an unforgeable identity signature — proving this is the <em>same physical unit</em> that was approved, independent of the serial sticker or seal.
-            </p>
-            <p className="font-label-mono-sm text-label-mono-sm text-on-surface-variant">
-              Instrument: {draftSession.manufacturer || fp.manufacturer} {draftSession.model || fp.model} · S/N: {draftSession.serialNumber || fp.instrumentSerial} · Class {draftSession.accuracyClass}
             </p>
           </div>
 
@@ -332,27 +501,10 @@ export const FingerprintView: React.FC = () => {
               ))}
             </div>
             {mode === 'VERIFY' && (
-              <div className="inline-flex rounded-xl bg-surface-container-low p-1 shadow-sm">
-                {(['genuine', 'swapped'] as Scenario[]).map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setScenario(s)}
-                    className={`px-3 py-1.5 rounded-lg font-label-mono-sm text-label-mono-sm font-semibold uppercase tracking-wider transition-all ${
-                      scenario === s
-                        ? s === 'genuine' ? 'bg-on-tertiary-container text-white shadow-sm' : 'bg-error text-on-error shadow-sm'
-                        : 'text-on-surface-variant hover:text-primary'
-                    }`}
-                  >
-                    {s === 'genuine' ? 'Demo: Genuine Unit' : 'Demo: Swapped Unit'}
-                  </button>
-                ))}
-              </div>
-            )}
-            {mode === 'VERIFY' && !checking && (
               <span className={`self-end px-2 py-0.5 rounded-full font-label-mono-sm text-[10px] font-bold uppercase tracking-wider ${
-                isLive ? 'bg-[#DCFCE7] text-[#15803D]' : 'bg-surface-container text-outline'
+                realStatus === 'ready' ? 'bg-[#DCFCE7] text-[#15803D]' : 'bg-surface-container text-outline'
               }`}>
-                {isLive ? 'Live Backend Computation' : 'Offline Demo Data'}
+                {realStatus === 'ready' ? 'Live Backend Computation' : realStatus === 'loading' ? 'Checking…' : 'Offline Demo Data'}
               </span>
             )}
           </div>
@@ -370,11 +522,29 @@ export const FingerprintView: React.FC = () => {
                 <h2 className="font-headline-sm text-headline-sm text-primary font-bold">Enrol Instrument Fingerprint at Type Approval</h2>
               </div>
             </div>
-            <p className="font-body-md text-body-md text-on-surface-variant max-w-3xl">
-              The full R-76 test suite for {draftSession.manufacturer || fp.manufacturer} {draftSession.model || fp.model} already produces
-              the data required. We extract a normalised feature vector — error curve, eccentricity pattern, repeatability spread, and creep profile —
-              and bind it cryptographically to this instrument's serial number, model, and approval date.
-            </p>
+
+            {realStatus === 'no_backend' ? (
+              <p className="font-body-md text-body-md text-on-surface-variant max-w-3xl">
+                Backend unreachable — showing an illustrative baseline. Enrolment will use deterministic demo data until the backend connection is restored.
+              </p>
+            ) : realStatus === 'loading' ? (
+              <p className="font-body-sm text-body-sm text-outline">Loading test sessions for this instrument…</p>
+            ) : !latestSession ? (
+              <div className="bg-error-container/30 border border-error/30 rounded-lg p-space-md font-body-md text-on-error-container">
+                No test sessions found for this instrument. Complete a verification first.
+              </div>
+            ) : latestReadings.length < 2 ? (
+              <div className="bg-error-container/30 border border-error/30 rounded-lg p-space-md font-body-md text-on-error-container">
+                Session {latestSession.session_code} doesn't have enough recorded readings yet (need at least 2).
+              </div>
+            ) : (
+              <p className="font-body-md text-body-md text-on-surface-variant max-w-3xl">
+                The full R-76 test suite for {selectedInstrument?.manufacturer} {selectedInstrument?.model} already produces
+                the data required. We extract a normalised feature vector — error curve, eccentricity pattern, repeatability spread, and creep profile —
+                and bind it cryptographically to this instrument's serial number, model, and approval date.
+              </p>
+            )}
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-space-md">
               {fp.features.map(f => (
                 <div key={f.key} className="bg-surface-container-low p-space-md rounded-lg space-y-1">
@@ -419,19 +589,47 @@ export const FingerprintView: React.FC = () => {
                 )}
               </div>
             </div>
-            <button onClick={handleEnrol} disabled={sealing || sealed} className={`btn-primary ${sealed ? 'opacity-70' : ''}`}>
+            <button
+              onClick={handleEnrol}
+              disabled={sealing || sealed || !canEnrol}
+              className={`btn-primary ${sealed ? 'opacity-70' : ''} ${!canEnrol && !sealed ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
               {sealing
                 ? <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
                 : sealed
                 ? <span className="material-symbols-outlined text-[16px]">verified</span>
                 : <span className="material-symbols-outlined text-[16px]">fingerprint</span>}
-              {sealing ? 'Enrolling & Sealing...' : sealed ? 'Fingerprint Enrolled & Sealed' : 'Enrol & Seal Baseline Fingerprint'}
+              {sealing
+                ? 'Enrolling & Sealing...'
+                : sealed
+                ? 'Fingerprint Enrolled & Sealed'
+                : latestSession
+                ? `Enrol Fingerprint from Session ${latestSession.session_code}`
+                : 'Enrol & Seal Baseline Fingerprint'}
             </button>
           </footer>
         </>
       ) : (
         <>
           {/* VERIFY MODE */}
+          {realStatus === 'not_enrolled' ? (
+            <section className="bg-surface-container-lowest p-space-lg rounded-xl shadow-card text-center space-y-space-sm">
+              <span className="material-symbols-outlined text-[36px] text-outline">fingerprint</span>
+              <h2 className="font-headline-sm text-headline-sm text-primary font-bold">No Fingerprint Enrolled Yet</h2>
+              <p className="font-body-md text-body-md text-on-surface-variant">Enrol a baseline fingerprint for this instrument before it can be identity-verified.</p>
+              <button onClick={() => setMode('ENROL')} className="btn-primary justify-center mx-auto">
+                <span className="material-symbols-outlined text-[16px]">fingerprint</span>
+                Enrol First
+              </button>
+            </section>
+          ) : realStatus === 'no_session' ? (
+            <section className="bg-surface-container-lowest p-space-lg rounded-xl shadow-card text-center space-y-space-sm">
+              <span className="material-symbols-outlined text-[36px] text-outline">history_toggle_off</span>
+              <h2 className="font-headline-sm text-headline-sm text-primary font-bold">No Test Sessions Found</h2>
+              <p className="font-body-md text-body-md text-on-surface-variant">This instrument has no completed verification sessions yet — complete one to enrol and verify its fingerprint.</p>
+            </section>
+          ) : (
+          <>
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-space-md">
             {/* Distance Gauge + Verdict */}
             <div className="xl:col-span-1 bg-surface-container-lowest p-space-lg rounded-xl shadow-card space-y-space-md flex flex-col">
@@ -488,11 +686,11 @@ export const FingerprintView: React.FC = () => {
                 <p className="font-body-sm text-body-sm text-on-surface-variant">{fp.headline}</p>
               </div>
 
-              <button onClick={handleRunVerify} disabled={checking} className="btn-primary justify-center">
-                {checking
+              <button onClick={handleRunRealVerify} disabled={realChecking} className="btn-primary justify-center">
+                {realChecking
                   ? <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
                   : <span className="material-symbols-outlined text-[16px]">sync</span>}
-                {checking ? 'Computing Distance...' : 'Re-run 5-Minute Verification Subset'}
+                {realChecking ? 'Computing Distance...' : 'Re-run 5-Minute Verification Subset'}
               </button>
             </div>
 
@@ -621,8 +819,55 @@ export const FingerprintView: React.FC = () => {
               </div>
             </div>
           </footer>
+          </>
+          )}
         </>
       )}
+
+      {/* Demo Simulation (Fix 1d) — separated from the real workflow above */}
+      <section className="bg-surface-container-high p-space-lg rounded-xl shadow-card space-y-space-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
+          <div>
+            <div className="font-label-mono-sm text-label-mono-sm text-secondary uppercase tracking-wider font-bold">Demo Mode</div>
+            <h2 className="font-headline-sm text-headline-sm text-primary font-bold">Simulated scenarios for demonstration purposes</h2>
+          </div>
+          <div className="inline-flex rounded-xl bg-surface-container-lowest p-1 shadow-sm">
+            {(['genuine', 'swapped'] as Scenario[]).map(s => (
+              <button
+                key={s}
+                onClick={() => { setDemoScenario(s); runDemoScenario(s); }}
+                className={`px-3 py-1.5 rounded-lg font-label-mono-sm text-label-mono-sm font-semibold uppercase tracking-wider transition-all ${
+                  demoScenario === s && demoRun
+                    ? s === 'genuine' ? 'bg-on-tertiary-container text-white shadow-sm' : 'bg-error text-on-error shadow-sm'
+                    : 'text-on-surface-variant hover:text-primary'
+                }`}
+              >
+                {s === 'genuine' ? 'Demo: Genuine Unit' : 'Demo: Swapped Unit'}
+              </button>
+            ))}
+          </div>
+        </div>
+        {demoRun && (
+          <div className={`rounded-xl p-space-md flex items-center justify-between gap-space-md ${demoIsMatch ? 'bg-on-tertiary-container/10 border border-on-tertiary-container/40' : 'bg-error-container/40 border border-error/40'}`}>
+            <div className="flex items-center gap-2">
+              <span className={`material-symbols-outlined text-[22px] ${demoIsMatch ? 'text-on-tertiary-container' : 'text-error'}`}>
+                {demoIsMatch ? 'verified_user' : 'gpp_bad'}
+              </span>
+              <div>
+                <div className={`font-headline-sm text-headline-sm font-bold ${demoIsMatch ? 'text-on-tertiary-container' : 'text-error'}`}>
+                  {demoFp.result} — distance {demoFp.distance.toFixed(2)} / threshold {demoFp.threshold.toFixed(2)}
+                </div>
+                <p className="font-body-sm text-body-sm text-on-surface-variant">{demoFp.headline}</p>
+              </div>
+            </div>
+            <span className={`px-2 py-0.5 rounded-full font-label-mono-sm text-[10px] font-bold uppercase tracking-wider flex-shrink-0 ${
+              demoIsLive ? 'bg-[#DCFCE7] text-[#15803D]' : 'bg-surface-container text-outline'
+            }`}>
+              {demoChecking ? 'Computing…' : demoIsLive ? 'Live Backend Computation' : 'Offline Demo Data'}
+            </span>
+          </div>
+        )}
+      </section>
 
       {/* Statutory Separation Banner */}
       <section className="bg-surface-container-high p-space-md rounded-xl shadow-card flex flex-col sm:flex-row items-center justify-between gap-space-sm">

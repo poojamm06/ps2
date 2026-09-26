@@ -3,7 +3,7 @@
  * Connects the React Frontend with the FastAPI + PostgreSQL backend.
  */
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://192.168.1.4:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://10.12.8.159:8000';
 
 /* ---- Typed API Models Matching Backend Schemas ---- */
 

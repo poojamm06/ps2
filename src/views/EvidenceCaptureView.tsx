@@ -1,8 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useVerification } from '../context/VerificationContext';
 import { evidenceApi } from '../services/api';
-import type { ApiEvidenceItem } from '../services/api';
+import type { ApiEvidenceItem, ApiOcrFieldResult, ApiOcrStructuredData } from '../services/api';
 import type { EvidenceCardItem } from '../types';
+
+type EvidenceItem = ApiEvidenceItem & { is_mock_local?: boolean };
+
+let mockLocalIdCounter = -1;
+
+const buildMockOcrField = (value: string, confidence: number): ApiOcrFieldResult => ({
+  value,
+  confidence,
+  status: 'EXTRACTED',
+  confidence_band: confidence >= 85 ? 'HIGH' : confidence >= 60 ? 'MEDIUM' : 'NEEDS_REVIEW',
+  is_corrected: false,
+  raw_ocr_value: null,
+});
 
 const defaultEvidenceSlots: EvidenceCardItem[] = [
   {
@@ -72,12 +85,12 @@ const typeIcons: Record<string, string> = {
 
 export const EvidenceCaptureView: React.FC = () => {
   const { draftSession, setCurrentView } = useVerification();
-  const [serverEvidence, setServerEvidence] = useState<ApiEvidenceItem[]>([]);
+  const [serverEvidence, setServerEvidence] = useState<EvidenceItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [uploading, setUploading] = useState<boolean>(false);
   const [processingOcrId, setProcessingOcrId] = useState<number | null>(null);
   const [activeSlotType, setActiveSlotType] = useState<string>('nameplate');
-  const [selectedItem, setSelectedItem] = useState<ApiEvidenceItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<EvidenceItem | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
@@ -107,13 +120,53 @@ export const EvidenceCaptureView: React.FC = () => {
     loadEvidence();
   }, [sessionId]);
 
+  // Deterministic mock OCR extraction, built from the active draft instrument —
+  // used when the backend is unreachable so the flow still demonstrates end to end.
+  const buildMockUpload = (file: File, slotType: string): EvidenceItem => {
+    const ocrData: ApiOcrStructuredData = {
+      manufacturer: buildMockOcrField(draftSession.manufacturer || 'Mettler-Toledo', 91),
+      model: buildMockOcrField(draftSession.model || 'XPR205', 89),
+      serial_number: buildMockOcrField(draftSession.serialNumber || 'DEMO-SN-0001', 84),
+      max_capacity: buildMockOcrField(String(draftSession.maxCapacity ?? 220), 88),
+      min_capacity: buildMockOcrField(String(draftSession.minCapacity ?? 1), 82),
+      verification_scale_interval_e: buildMockOcrField(String(draftSession.verificationScaleInterval_e ?? 0.1), 90),
+      actual_scale_interval_d: buildMockOcrField(String(draftSession.actualScaleInterval_d ?? 0.01), 87),
+      accuracy_class: buildMockOcrField(draftSession.accuracyClass || 'II', 93),
+      unit: buildMockOcrField(draftSession.unit || 'g', 95),
+      software_id: buildMockOcrField(`SW-${(draftSession.manufacturer || 'GEN').slice(0, 3).toUpperCase()}-CORE-v4.7.2`, 76),
+      approval_certificate_number: buildMockOcrField('T10001', 80),
+    };
+    const id = mockLocalIdCounter--;
+    return {
+      id,
+      session_id: sessionId || 0,
+      instrument_id: null,
+      evidence_type: slotType,
+      evidence_reference: `EVD-MOCK-${slotType.toUpperCase()}-${Date.now().toString().slice(-4)}`,
+      file_name: file.name,
+      mime_type: file.type,
+      file_size_bytes: file.size,
+      download_url: URL.createObjectURL(file),
+      ocr_status: 'EXTRACTED',
+      ocr_confidence: 87,
+      ocr_raw_text: '[Demo Mode] Backend unreachable — showing simulated OCR extraction.',
+      ocr_data: ocrData,
+      consistency_status: 'MATCH',
+      consistency_details: JSON.stringify({ summary: 'Demo Mode: simulated consistency check against the active draft instrument.', field_checks: [] }),
+      has_corrections: false,
+      was_mock_extraction: true,
+      is_mock_local: true,
+      created_at: new Date().toISOString(),
+    };
+  };
+
   // Handle file selection and upload
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!sessionId) {
-      setApiError('No active backend session yet — create or resume a test session before capturing evidence.');
+      setApiError('Start a test session first — no active backend session yet, so evidence cannot be linked to a verification.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -132,8 +185,11 @@ export const EvidenceCaptureView: React.FC = () => {
       setServerEvidence(prev => [uploaded, ...prev.filter(x => x.id !== uploaded.id)]);
       setSelectedItem(uploaded);
     } catch (err: any) {
-      console.warn('Evidence upload failed:', err?.message);
-      setApiError('Could not reach the backend to upload this image. Check your connection and try again.');
+      console.warn('Evidence upload failed, falling back to local mock preview:', err?.message);
+      const mockItem = buildMockUpload(file, activeSlotType);
+      setServerEvidence(prev => [mockItem, ...prev.filter(x => !(x.is_mock_local && x.evidence_type === mockItem.evidence_type))]);
+      setSelectedItem(mockItem);
+      setApiError('Backend unreachable — showing a simulated preview with demo OCR extraction.');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -192,9 +248,34 @@ export const EvidenceCaptureView: React.FC = () => {
 
   const handleSaveCorrection = async (evidenceId: number, fieldName: string) => {
     if (!editingValue.trim()) return;
+    const value = editingValue.trim();
+
+    // Mock/local items (backend unreachable) correct in place, no API call.
+    if (selectedItem?.is_mock_local && selectedItem.id === evidenceId) {
+      setSavingField(fieldName);
+      const applyCorrection = (item: EvidenceItem): EvidenceItem => {
+        if (!item.ocr_data) return item;
+        const prevField = (item.ocr_data as any)[fieldName] as ApiOcrFieldResult;
+        return {
+          ...item,
+          has_corrections: true,
+          ocr_data: {
+            ...item.ocr_data,
+            [fieldName]: { ...prevField, value, is_corrected: true, confidence: 100, raw_ocr_value: prevField.raw_ocr_value ?? prevField.value },
+          },
+        };
+      };
+      setServerEvidence(prev => prev.map(item => item.id === evidenceId ? applyCorrection(item) : item));
+      setSelectedItem(prev => prev && prev.id === evidenceId ? applyCorrection(prev) : prev);
+      setEditingField(null);
+      setEditingValue('');
+      setSavingField(null);
+      return;
+    }
+
     try {
       setSavingField(fieldName);
-      const updated = await evidenceApi.correctField(evidenceId, fieldName, editingValue.trim());
+      const updated = await evidenceApi.correctField(evidenceId, fieldName, value);
       setServerEvidence(prev => prev.map(item => item.id === evidenceId ? updated : item));
       setSelectedItem(prev => prev && prev.id === evidenceId ? updated : prev);
       setEditingField(null);
@@ -331,13 +412,23 @@ export const EvidenceCaptureView: React.FC = () => {
         {displayItems.map(item => {
           const isUploaded = !!item.serverItem;
           const serverId = item.serverItem?.id;
-          const fileUrl = serverId ? evidenceApi.getFileUrl(serverId) : null;
+          const fileUrl = item.serverItem?.is_mock_local
+            ? item.serverItem.download_url
+            : serverId
+            ? evidenceApi.getFileUrl(serverId)
+            : null;
           const isProcessing = processingOcrId === serverId;
 
           return (
             <div
               key={item.id}
-              onClick={() => item.serverItem && setSelectedItem(selectedItem?.id === serverId ? null : item.serverItem)}
+              onClick={() => {
+                if (item.serverItem) {
+                  setSelectedItem(selectedItem?.id === serverId ? null : item.serverItem);
+                } else {
+                  triggerUploadFor(item.type);
+                }
+              }}
               className={`bg-surface-container-lowest rounded-xl shadow-card border cursor-pointer transition-all hover:shadow-card-hover flex flex-col justify-between ${
                 selectedItem?.id === serverId ? 'border-secondary shadow-card-hover' : 'border-outline-variant/20'
               }`}
@@ -422,7 +513,7 @@ export const EvidenceCaptureView: React.FC = () => {
               <div className="p-space-md pt-0">
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-outline-variant/20">
                   <button
-                    onClick={() => triggerUploadFor(item.type)}
+                    onClick={(e) => { e.stopPropagation(); triggerUploadFor(item.type); }}
                     className="btn-ghost flex-1 justify-center text-[11px]"
                   >
                     <span className="material-symbols-outlined text-[14px]">photo_camera</span>

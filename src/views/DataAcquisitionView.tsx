@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useVerification } from '../context/VerificationContext';
 import { ObservationGrid } from '../components/ObservationGrid';
 import { readingsApi } from '../services/api';
@@ -30,6 +30,14 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
     }
     return defaultDemoStaticPoints;
   });
+
+  // Kept in sync with `points` so handlers that only need a length/existence
+  // check (delete guard) can stay referentially stable without depending on
+  // `points` itself — see handleDeletePoint below.
+  const pointsRef = useRef(points);
+  useEffect(() => {
+    pointsRef.current = points;
+  }, [points]);
 
   const [testDirection, setTestDirection] = useState<'increasing' | 'decreasing'>(
     draftSession.testDirection || 'increasing'
@@ -81,14 +89,18 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
     loadDatabaseReadings();
   }, [loadDatabaseReadings]);
 
-  // Point management handlers
-  const handleUpdatePoint = (id: string, field: keyof StaticWeighingPoint, value: string) => {
+  // Point management handlers — all stable via useCallback + functional setState
+  // (no `points` in the dependency array). ObservationGrid's TanStack Table
+  // columns are memoized on these handler identities; an unstable reference
+  // here forced a full column/cell recompute — and input remount — on every
+  // keystroke, which is what caused the reported focus loss.
+  const handleUpdatePoint = useCallback((id: string, field: keyof StaticWeighingPoint, value: string) => {
     setPoints(prev => {
       const updated = prev.map(pt => (pt.id === id ? { ...pt, [field]: value } : pt));
       updateDraft({ staticWeighingPoints: updated });
       return updated;
     });
-  };
+  }, [updateDraft]);
 
   const handleAddPoint = () => {
     const nextNum = points.length + 1;
@@ -113,8 +125,8 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const handleDeletePoint = async (id: string) => {
-    if (points.length <= 1) {
+  const handleDeletePoint = useCallback(async (id: string) => {
+    if (pointsRef.current.length <= 1) {
       setToastMessage('At least one observation point must remain.');
       setTimeout(() => setToastMessage(null), 3000);
       return;
@@ -131,29 +143,31 @@ export const DataAcquisitionView: React.FC<DataAcquisitionViewProps> = ({ onBack
       }
     }
 
-    const filtered = points
-      .filter(pt => pt.id !== id)
-      .map((pt, idx) => ({ ...pt, pointNumber: idx + 1 }));
-    setPoints(filtered);
-    updateDraft({ staticWeighingPoints: filtered });
-  };
+    setPoints(prev => {
+      const filtered = prev.filter(pt => pt.id !== id).map((pt, idx) => ({ ...pt, pointNumber: idx + 1 }));
+      updateDraft({ staticWeighingPoints: filtered });
+      return filtered;
+    });
+  }, [updateDraft]);
 
-  const handleDuplicatePoint = (id: string) => {
-    const target = points.find(pt => pt.id === id);
-    if (!target) return;
+  const handleDuplicatePoint = useCallback((id: string) => {
+    setPoints(prev => {
+      const target = prev.find(pt => pt.id === id);
+      if (!target) return prev;
 
-    const duplicated: StaticWeighingPoint = {
-      ...target,
-      id: `pt_dup_${Date.now()}`,
-      pointNumber: points.length + 1,
-    };
+      const duplicated: StaticWeighingPoint = {
+        ...target,
+        id: `pt_dup_${Date.now()}`,
+        pointNumber: prev.length + 1,
+      };
 
-    const updated = [...points, duplicated];
-    setPoints(updated);
-    updateDraft({ staticWeighingPoints: updated });
-    setToastMessage(`Point duplicated as #${points.length + 1}.`);
+      const updated = [...prev, duplicated];
+      updateDraft({ staticWeighingPoints: updated });
+      setToastMessage(`Point duplicated as #${prev.length + 1}.`);
+      return updated;
+    });
     setTimeout(() => setToastMessage(null), 2500);
-  };
+  }, [updateDraft]);
 
   const handleResetDemo = () => {
     setPoints(defaultDemoStaticPoints);

@@ -420,12 +420,17 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     setDraftSession(blankDraftData);
   };
 
-  const updateDraft = (data: Partial<DraftFormData>) => {
+  // useCallback with empty deps: this only ever uses the functional setState
+  // form, so it never needs to close over `draftSession`. Keeping it referentially
+  // stable matters — components downstream (e.g. ObservationGrid's memoized
+  // TanStack Table columns) depend on it, and an unstable reference here forces
+  // those to recompute — and their cell inputs to remount — on every keystroke.
+  const updateDraft = useCallback((data: Partial<DraftFormData>) => {
     setDraftSession(prev => ({
       ...prev,
       ...data,
     }));
-  };
+  }, []);
 
   // Creates a genuinely new session — generates real unique session code from backend
   const createNewSession = async (presetInstrument?: Instrument) => {
