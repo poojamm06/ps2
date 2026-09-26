@@ -305,17 +305,21 @@ export const DashboardView: React.FC = () => {
       </div>
 
       {/* Anomaly Alerts Strip */}
-      {anomalyAlerts.length > 0 && (
-        <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
-          <div className="section-heading-row">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px] text-error">crisis_alert</span>
-              <h3 className="section-heading-title">Anomaly Intelligence Flags ({anomalyAlerts.length})</h3>
-            </div>
-            <span onClick={() => setCurrentView('anomaly')} className="section-heading-link">
-              View all <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+      <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">
+        <div className="section-heading-row">
+          <div className="flex items-center gap-2">
+            <span className={`material-symbols-outlined text-[20px] ${anomalyAlerts.length > 0 ? 'text-error' : 'text-primary'}`}>
+              {anomalyAlerts.length > 0 ? 'crisis_alert' : 'verified'}
             </span>
+            <h3 className="section-heading-title">
+              Anomaly Intelligence {anomalyAlerts.length > 0 ? `Flags (${anomalyAlerts.length})` : 'Status'}
+            </h3>
           </div>
+          <span onClick={() => setCurrentView('anomaly')} className="section-heading-link">
+            {anomalyAlerts.length > 0 ? 'View all' : 'Run Analysis'} <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+          </span>
+        </div>
+        {anomalyAlerts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-space-sm">
             {anomalyAlerts.map(alert => (
               <div key={alert.id} className="bg-surface-container-low p-space-md rounded-xl">
@@ -330,8 +334,13 @@ export const DashboardView: React.FC = () => {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="flex items-center gap-3 p-space-md bg-surface-container-low rounded-xl text-on-surface-variant font-body-sm">
+            <span className="material-symbols-outlined text-[20px] text-[#16A34A]">check_circle</span>
+            <span>No active anomaly flags detected across verified sessions. Statistical distributions within OIML R-76 tolerance limits.</span>
+          </div>
+        )}
+      </div>
 
       {/* Recent Verifications — document-row cards */}
       <div className="bg-surface-container-lowest rounded-2xl shadow-card border border-outline-variant/40 p-space-lg">

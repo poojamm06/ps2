@@ -26,10 +26,51 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.anomaly_result import AnomalyResult
 from app.models.audit_log import AuditLog
+from app.models.instrument import Instrument
 from app.models.reading import Reading
 from app.models.test_session import TestSession
 
 router = APIRouter(prefix="/anomaly", tags=["Anomaly Intelligence"])
+
+
+@router.get("/recent", status_code=status.HTTP_200_OK)
+def get_recent_anomalies(
+    limit: int = 10,
+    db: Session = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """Retrieve recent anomaly analysis results across all verified sessions."""
+    records = (
+        db.query(AnomalyResult)
+        .order_by(AnomalyResult.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    results = []
+    for r in records:
+        session = db.query(TestSession).filter(TestSession.id == r.session_id).first()
+        inst = (
+            db.query(Instrument).filter(Instrument.id == session.instrument_id).first()
+            if session and session.instrument_id
+            else None
+        )
+        flags = []
+        try:
+            flags = json.loads(r.flags_json) if r.flags_json else []
+        except Exception:
+            flags = []
+        results.append({
+            "id": f"anom_{r.id}",
+            "session_id": r.session_id,
+            "session_code": session.session_code if session else f"Session-{r.session_id}",
+            "instrument_serial": inst.serial_number if inst else "UNKNOWN",
+            "classification": r.classification,
+            "anomaly_score": r.anomaly_score,
+            "detection_method": r.detection_method,
+            "summary": r.summary,
+            "flags": flags,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
+    return results
 
 
 def _compute_zscore_flags(errors: List[float]) -> Dict[str, Any]:

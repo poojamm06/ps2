@@ -80,21 +80,27 @@ export const AppHeader: React.FC = () => {
                 </span>
               </div>
               <div className="max-h-64 overflow-y-auto">
-                {anomalyAlerts.map(alert => (
-                  <div
-                    key={alert.id}
-                    onClick={() => { setCurrentView('anomaly'); setNotifOpen(false); }}
-                    className="doc-row rounded-none border-b border-outline-variant/30 last:border-b-0"
-                  >
-                    <div className={`doc-row-icon ${alert.severity === 'Anomaly' ? 'bg-[#FEE2E2] text-error' : 'bg-[#FEF3C7] text-[#B45309]'}`}>
-                      <span className="material-symbols-outlined text-[18px]">warning</span>
+                {anomalyAlerts.length > 0 ? (
+                  anomalyAlerts.map(alert => (
+                    <div
+                      key={alert.id}
+                      onClick={() => { setCurrentView('anomaly'); setNotifOpen(false); }}
+                      className="doc-row rounded-none border-b border-outline-variant/30 last:border-b-0"
+                    >
+                      <div className={`doc-row-icon ${alert.severity === 'Anomaly' ? 'bg-[#FEE2E2] text-error' : 'bg-[#FEF3C7] text-[#B45309]'}`}>
+                        <span className="material-symbols-outlined text-[18px]">warning</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-body-md text-body-sm font-semibold text-on-surface truncate">{alert.title}</div>
+                        <div className="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">{alert.description}</div>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-body-md text-body-sm font-semibold text-on-surface truncate">{alert.title}</div>
-                      <div className="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">{alert.description}</div>
-                    </div>
+                  ))
+                ) : (
+                  <div className="p-space-md text-center font-body-sm text-body-sm text-on-surface-variant">
+                    No active anomaly alerts
                   </div>
-                ))}
+                )}
               </div>
               <div className="p-space-sm text-center border-t border-outline-variant/30">
                 <button

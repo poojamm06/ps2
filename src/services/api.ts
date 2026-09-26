@@ -3,7 +3,7 @@
  * Connects the React Frontend with the FastAPI + PostgreSQL backend.
  */
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://10.12.8.159:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 /* ---- Typed API Models Matching Backend Schemas ---- */
 
@@ -693,6 +693,8 @@ export const anomalyApi = {
     }),
   getSessionAnomaly: (sessionId: number) =>
     apiRequest<AnomalyApiResult>(`/api/anomaly/session/${sessionId}`),
+  getRecentAnomalies: (limit: number = 10) =>
+    apiRequest<any[]>(`/api/anomaly/recent?limit=${limit}`),
 };
 
 /* ---- Software Verification API ---- */
@@ -803,3 +805,5 @@ export const softwareExamApi = {
 /* ---- Sessions generate-code ---- */
 export const sessionsGenerateCode = (): Promise<{ session_code: string }> =>
   apiRequest<{ session_code: string }>('/api/sessions/generate-code');
+
+

@@ -14,7 +14,6 @@ import type {
 } from '../types';
 import { 
   mockCurrentUser, 
-  mockAnomalyAlerts, 
 } from '../mock/mockData';
 import { 
   healthApi, 
@@ -22,12 +21,14 @@ import {
   sessionsApi, 
   auditApi,
   dashboardApi,
+  anomalyApi,
   sessionsGenerateCode,
   readingsApi,
   type ApiInstrument, 
   type ApiTestSession,
   type ApiReading
 } from '../services/api';
+
 
 export type NavigationKey = 
   | 'dashboard'
@@ -312,7 +313,7 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     complianceRatePercent: 0,
     anomaliesDetectedCount: 0,
   });
-  const [anomalyAlerts] = useState<AnomalyAlert[]>(mockAnomalyAlerts);
+  const [anomalyAlerts, setAnomalyAlerts] = useState<AnomalyAlert[]>([]);
   const [auditTrail, setAuditTrail] = useState<AuditTrailEntry[]>([]);
   const [draftSession, setDraftSession] = useState<DraftFormData>(blankDraftData);
 
@@ -333,10 +334,11 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       setDatabaseConnected(dbHealth.status === 'ok');
 
       // 2. Fetch real data from PostgreSQL
-      const [apiInstruments, apiSessions, apiAudit] = await Promise.all([
+      const [apiInstruments, apiSessions, apiAudit, apiAnomalies] = await Promise.all([
         instrumentsApi.getInstruments(),
         sessionsApi.getSessions(),
         auditApi.getRecentLogs(50).catch(() => []),
+        anomalyApi.getRecentAnomalies(10).catch(() => []),
       ]);
 
       const frontendInstruments = apiInstruments.map(mapApiInstrumentToFrontend);
@@ -348,6 +350,31 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       setInstruments(frontendInstruments);
       setTestSessions(frontendSessions);
 
+      // Map real PostgreSQL anomaly results to frontend AnomalyAlert shape
+      const realAlerts: AnomalyAlert[] = apiAnomalies
+        .filter(a => a.classification === 'ANOMALY' || a.classification === 'ATTENTION' || (Array.isArray(a.flags) && a.flags.length > 0))
+        .map(a => {
+          const isAnomaly = a.classification === 'ANOMALY';
+          const severity: 'Anomaly' | 'Attention' = isAnomaly ? 'Anomaly' : 'Attention';
+          const desc = Array.isArray(a.flags) && a.flags.length > 0
+            ? a.flags.map((f: any) => f.description || f.flag).join('; ')
+            : a.summary || 'Statistical deviation detected in session measurements.';
+
+          return {
+            id: String(a.id || `anom_${a.session_id}`),
+            sessionId: a.session_code || `Session #${a.session_id}`,
+            instrumentSerial: a.instrument_serial || 'Unknown',
+            category: isAnomaly ? 'Process Deviation' : 'Repeatability Drift',
+            severity,
+            score: Number(a.anomaly_score) || 0,
+            title: `${a.classification}: ${a.instrument_serial || a.session_code || 'Instrument'} (${a.detection_method || 'Statistical'})`,
+            description: desc,
+            timestamp: a.created_at ? a.created_at.replace('T', ' ').substring(0, 19) : new Date().toISOString(),
+          };
+        });
+
+      setAnomalyAlerts(realAlerts);
+
       // 3. Fetch real dashboard stats
       try {
         const stats = await dashboardApi.getStats();
@@ -356,7 +383,7 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
           instrumentsVerifiedCount: stats.total_instruments,
           pendingReviewsCount: stats.pending_reviews,
           complianceRatePercent: stats.compliance_rate_percent,
-          anomaliesDetectedCount: stats.fail_count + stats.review_count, // rough proxy
+          anomaliesDetectedCount: realAlerts.length,
         });
       } catch {
         // Fallback calculation if dashboard endpoint fails
@@ -368,7 +395,7 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
           instrumentsVerifiedCount: frontendInstruments.length,
           complianceRatePercent: compRate,
           pendingReviewsCount: apiSessions.filter(s => s.compliance_verdict === 'REVIEW').length,
-          anomaliesDetectedCount: 0,
+          anomaliesDetectedCount: realAlerts.length,
         });
       }
 
@@ -388,6 +415,7 @@ export const VerificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       console.warn('Backend connection notice:', err.message);
       setBackendConnected(false);
       setDatabaseConnected(false);
+      setAnomalyAlerts([]);
       setBackendError(err.message || 'Could not connect to FastAPI / PostgreSQL backend.');
     } finally {
       setBackendLoading(false);
