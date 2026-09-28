@@ -7,6 +7,7 @@ import { DashboardView } from './views/DashboardView';
 import { DigitalRepositoryView } from './views/DigitalRepositoryView';
 import { InstrumentView } from './views/InstrumentView';
 import { NewTestSessionView } from './views/NewTestSessionView';
+import { ObservationsView } from './views/ObservationsView';
 import { DataAcquisitionView } from './views/DataAcquisitionView';
 import { EvidenceCaptureView } from './views/EvidenceCaptureView';
 import { ComplianceView } from './views/ComplianceView';
@@ -38,6 +39,7 @@ const AppContent: React.FC = () => {
       case 'new-test-session':
         return <NewTestSessionView />;
       case 'observations':
+        return <ObservationsView />;
       case 'data-acquisition':
         return <DataAcquisitionView />;
       case 'compliance':

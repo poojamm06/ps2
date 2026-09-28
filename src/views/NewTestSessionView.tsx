@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useVerification } from '../context/VerificationContext';
-import { DataAcquisitionView } from './DataAcquisitionView';
+import { ObservationsView } from './ObservationsView';
 import { ComplianceView } from './ComplianceView';
 import { ResultsView } from './ResultsView';
 import { DigitalReportView } from './DigitalReportView';
@@ -91,7 +91,7 @@ export const NewTestSessionView: React.FC = () => {
     switch (currentStep) {
       case 2:
         return (
-          <DataAcquisitionView 
+          <ObservationsView 
             onBack={handleBack} 
             onContinue={() => {
               setCurrentStep(3);

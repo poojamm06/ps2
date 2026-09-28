@@ -114,19 +114,42 @@ export const ObservationGrid: React.FC<ObservationGridProps> = ({
           const isInvalidNum = val.trim() !== '' && isNaN(parseFloat(val));
 
           return (
-            <div className="relative">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={val}
-                onChange={(e) => onUpdatePoint(row.id, 'indication', e.target.value)}
-                placeholder="--"
-                className={`w-full text-right px-2.5 py-1.5 rounded border metrology-mono text-xs font-semibold focus:outline-none focus:ring-1 transition-colors ${
-                  isInvalidNum
-                    ? 'border-error bg-error/5 text-error focus:ring-error'
-                    : 'border-outline-variant/50 bg-surface-container-lowest text-primary focus:border-secondary focus:ring-secondary'
-                }`}
-              />
+            <div className="space-y-0.5">
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={val}
+                  onChange={(e) => onUpdatePoint(row.id, 'indication', e.target.value)}
+                  placeholder="--"
+                  className={`w-full text-right px-2.5 py-1.5 rounded border metrology-mono text-xs font-semibold focus:outline-none focus:ring-1 transition-colors ${
+                    isInvalidNum
+                      ? 'border-error bg-error/5 text-error focus:ring-error'
+                      : 'border-outline-variant/50 bg-surface-container-lowest text-primary focus:border-secondary focus:ring-secondary'
+                  }`}
+                />
+              </div>
+              {val.trim() !== '' && (
+                <div className="flex justify-end">
+                  {row.source === 'USB' || row.source === 'RS-232' ? (
+                    <span 
+                      className="text-[9px] px-1.5 py-0.2 rounded bg-[#EEEBFF] text-primary font-bold flex items-center gap-0.5 border border-primary/20"
+                      title={`Captured via physical ${row.source} hardware`}
+                    >
+                      <span className="material-symbols-outlined text-[10px]">cable</span>
+                      {row.source}
+                    </span>
+                  ) : (
+                    <span 
+                      className="text-[9px] px-1.5 py-0.2 rounded bg-surface-container text-outline flex items-center gap-0.5"
+                      title="Manually entered value"
+                    >
+                      <span className="material-symbols-outlined text-[10px]">edit</span>
+                      Manual
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           );
         },

@@ -47,6 +47,7 @@ export interface StaticWeighingPoint {
   mVerifIntervals?: number;     // m = L / e
   pointVerdict?: 'PASS' | 'FAIL' | 'REVIEW' | 'PENDING' | 'NOT_TESTED';
   isDemo?: boolean;
+  source?: 'USB' | 'RS-232' | 'MANUAL';
 }
 
 // NAWI Instrument Categories

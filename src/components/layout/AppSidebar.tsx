@@ -30,6 +30,7 @@ export const AppSidebar: React.FC = () => {
         { key: 'instruments', icon: 'scale', label: 'Instruments' },
         { key: 'test-session', icon: 'assignment_add', label: 'Test Session' },
         { key: 'observations', icon: 'sensors', label: 'Observations' },
+        { key: 'data-acquisition', icon: 'cable', label: 'Data Acquisition' },
         { key: 'evidence', icon: 'photo_camera', label: 'Evidence' },
         { key: 'compliance', icon: 'fact_check', label: 'Compliance' },
         { key: 'results', icon: 'checklist', label: 'Results' },
@@ -55,7 +56,6 @@ export const AppSidebar: React.FC = () => {
 
   const getActiveKey = (): NavigationKey => {
     if (currentView === 'new-test-session' || currentView === 'test-sessions') return 'test-session';
-    if (currentView === 'data-acquisition') return 'observations';
     return currentView;
   };
 
